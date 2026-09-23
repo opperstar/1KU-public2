@@ -1,0 +1,43 @@
+name: C04 Exclusive Gate Qualification
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "tests/c04-exclusive/**"
+      - ".github/workflows/c04-exclusive-gate.yml"
+  workflow_dispatch:
+
+jobs:
+  qualify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - macos-15
+          - ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Run C04 exclusive gate qualification
+        run: node tests/c04-exclusive/controller.mjs
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c04-exclusive-gate-${{ runner.os }}-${{ runner.arch }}
+          path: artifacts/c04-exclusive-gate-*.json
+          if-no-files-found: error
+
+# qualification-trigger
