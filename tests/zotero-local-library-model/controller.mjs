@@ -327,6 +327,51 @@ await runScenario('C3_same_libraryid_clients_can_have_independent_local_db_versi
   };
 });
 
+
+// D — shared logical-Library compatibility boundary using current 923 portable library metadata admission
+function old923ParsePortableLibraryMetadata(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('PORTABLE_LIBRARY_METADATA_INVALID');
+  }
+  if (value.schemaVersion !== 1) throw new Error('PORTABLE_LIBRARY_SCHEMA_UNSUPPORTED');
+  if (typeof value.libraryId !== 'string') throw new Error('PORTABLE_LIBRARY_ID_INVALID');
+  return { schemaVersion: 1, libraryId: value.libraryId };
+}
+
+await runScenario('D1_future_shared_library_format_blocks_old923_before_local_main', async () => {
+  const libraryId = crypto.randomUUID();
+  const clientRoot = path.join(root, 'D1', 'old923-client');
+  const portableRoot = path.join(root, 'D1', 'shared-portable');
+  const libraryJson = path.join(portableRoot, 'library.json');
+  const localMain = path.join(clientRoot, 'main.sqlite');
+  await fs.mkdir(portableRoot, { recursive: true });
+  await fs.writeFile(libraryJson, JSON.stringify({ schemaVersion: 2, libraryId }) + '\n');
+
+  let message = '';
+  try {
+    const metadata = old923ParsePortableLibraryMetadata(JSON.parse(await fs.readFile(libraryJson, 'utf8')));
+    // Mirrors current 923 ordering: local DB work is downstream of portable admission.
+    createMain(localMain, { libraryId: metadata.libraryId, compatibilityVersion: 4, value: 'should-not-exist' });
+  } catch (error) {
+    message = error.message;
+  }
+
+  assert(message === 'PORTABLE_LIBRARY_SCHEMA_UNSUPPORTED', 'old 923 did not fail closed on future shared Library format', { message });
+  assert(!fss.existsSync(localMain), 'old 923 reached local Main after shared Library format rejection', { localMain });
+  return { sharedLibraryAdmission: 'UPGRADE_REQUIRED', localMainTouched: false };
+});
+
+await runScenario('D2_current_shared_library_format_preserves_same_logical_libraryid', async () => {
+  const libraryId = crypto.randomUUID();
+  const portableRoot = path.join(root, 'D2', 'shared-portable');
+  const libraryJson = path.join(portableRoot, 'library.json');
+  await fs.mkdir(portableRoot, { recursive: true });
+  await fs.writeFile(libraryJson, JSON.stringify({ schemaVersion: 1, libraryId }) + '\n');
+  const metadata = old923ParsePortableLibraryMetadata(JSON.parse(await fs.readFile(libraryJson, 'utf8')));
+  assert(metadata.libraryId === libraryId, 'portable admission changed logical Library identity', metadata);
+  return { sharedLibraryFormat: 1, logicalLibraryId: metadata.libraryId };
+});
+
 const failures = Object.entries(evidence.scenarios).filter(([, value]) => value.result !== 'PASS');
 evidence.result = failures.length ? 'FAIL' : 'PASS';
 evidence.failedScenarios = failures.map(([name]) => name);
