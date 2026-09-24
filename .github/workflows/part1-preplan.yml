@@ -1,0 +1,41 @@
+name: PART-1 Preplan Qualification
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "tests/part1-preplan/**"
+      - ".github/workflows/part1-preplan.yml"
+  workflow_dispatch:
+
+jobs:
+  qualify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - macos-15
+          - ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Run PART-1 preplan qualification
+        run: node tests/part1-preplan/controller.mjs
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: part1-preplan-${{ runner.os }}-${{ runner.arch }}
+          path: artifacts/part1-preplan-*.json
+          if-no-files-found: error
