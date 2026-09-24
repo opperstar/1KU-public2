@@ -1,0 +1,141 @@
+name: C04 Cross Account Qualification
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "tests/c04-cross-account/**"
+      - ".github/workflows/c04-cross-account.yml"
+  workflow_dispatch:
+
+jobs:
+  qualify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - macos-15
+          - ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Linux cross-account qualification
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo useradd -m ikuqa || true
+          sudo useradd -m ikuqb || true
+          coord="/var/tmp/1ku-c04-cross-account"
+          lib="11111111-1111-4111-8111-222222222222"
+          script="$GITHUB_WORKSPACE/tests/c04-cross-account/cross-account-probe.mjs"
+          sudo rm -rf "$coord"
+          sudo -u ikuqa "$(command -v node)" "$script" "$coord" "$lib" 4000 "/var/tmp/ikuqa-owner.json" &
+          owner_pid=$!
+          for i in $(seq 1 50); do
+            test -f /var/tmp/ikuqa-owner.json && break
+            sleep 0.1
+          done
+          test -f /var/tmp/ikuqa-owner.json
+          cat /var/tmp/ikuqa-owner.json
+          sudo -u ikuqb "$(command -v node)" "$script" "$coord" "$lib" 0 "/var/tmp/ikuqb-denied.json"
+          cat /var/tmp/ikuqb-denied.json
+          node -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync('/var/tmp/ikuqa-owner.json'));const b=JSON.parse(fs.readFileSync('/var/tmp/ikuqb-denied.json'));if(a.result!=='ACQUIRED'||b.result!=='DENIED')process.exit(1)"
+          wait "$owner_pid"
+          sudo -u ikuqb "$(command -v node)" "$script" "$coord" "$lib" 0 "/var/tmp/ikuqb-after.json"
+          cat /var/tmp/ikuqb-after.json
+          node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync('/var/tmp/ikuqb-after.json'));if(c.result!=='ACQUIRED')process.exit(1)"
+          mkdir -p artifacts
+          cp /var/tmp/ikuqa-owner.json /var/tmp/ikuqb-denied.json /var/tmp/ikuqb-after.json artifacts/
+
+      - name: macOS cross-account qualification
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo sysadminctl -addUser ikuqa -password 'Iku-QA-2026!' -home /Users/ikuqa || true
+          sudo sysadminctl -addUser ikuqb -password 'Iku-QB-2026!' -home /Users/ikuqb || true
+          coord="/Users/Shared/1ku-c04-cross-account"
+          lib="11111111-1111-4111-8111-222222222222"
+          script="$GITHUB_WORKSPACE/tests/c04-cross-account/cross-account-probe.mjs"
+          sudo rm -rf "$coord"
+          sudo -u ikuqa "$(command -v node)" "$script" "$coord" "$lib" 4000 "/Users/Shared/ikuqa-owner.json" &
+          owner_pid=$!
+          for i in $(seq 1 50); do
+            test -f /Users/Shared/ikuqa-owner.json && break
+            sleep 0.1
+          done
+          test -f /Users/Shared/ikuqa-owner.json
+          cat /Users/Shared/ikuqa-owner.json
+          sudo -u ikuqb "$(command -v node)" "$script" "$coord" "$lib" 0 "/Users/Shared/ikuqb-denied.json"
+          cat /Users/Shared/ikuqb-denied.json
+          node -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync('/Users/Shared/ikuqa-owner.json'));const b=JSON.parse(fs.readFileSync('/Users/Shared/ikuqb-denied.json'));if(a.result!=='ACQUIRED'||b.result!=='DENIED')process.exit(1)"
+          wait "$owner_pid"
+          sudo -u ikuqb "$(command -v node)" "$script" "$coord" "$lib" 0 "/Users/Shared/ikuqb-after.json"
+          cat /Users/Shared/ikuqb-after.json
+          node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync('/Users/Shared/ikuqb-after.json'));if(c.result!=='ACQUIRED')process.exit(1)"
+          mkdir -p artifacts
+          cp /Users/Shared/ikuqa-owner.json /Users/Shared/ikuqb-denied.json /Users/Shared/ikuqb-after.json artifacts/
+
+      - name: Windows cross-account qualification
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pwAPlain = 'Iku-QA-2026!'
+          $pwBPlain = 'Iku-QB-2026!'
+          $pwA = ConvertTo-SecureString $pwAPlain -AsPlainText -Force
+          $pwB = ConvertTo-SecureString $pwBPlain -AsPlainText -Force
+          if (-not (Get-LocalUser -Name 'ikuqa' -ErrorAction SilentlyContinue)) { New-LocalUser -Name 'ikuqa' -Password $pwA -PasswordNeverExpires | Out-Null }
+          if (-not (Get-LocalUser -Name 'ikuqb' -ErrorAction SilentlyContinue)) { New-LocalUser -Name 'ikuqb' -Password $pwB -PasswordNeverExpires | Out-Null }
+          $credA = New-Object System.Management.Automation.PSCredential(".\ikuqa", $pwA)
+          $credB = New-Object System.Management.Automation.PSCredential(".\ikuqb", $pwB)
+          $public = $env:PUBLIC
+          $coord = Join-Path $public '1ku-c04-cross-account'
+          $script = Join-Path $public 'cross-account-probe.mjs'
+          Copy-Item "$env:GITHUB_WORKSPACE\tests\c04-cross-account\cross-account-probe.mjs" $script -Force
+          if (Test-Path $coord) { Remove-Item $coord -Recurse -Force }
+          $lib = '11111111-1111-4111-8111-222222222222'
+          $node = (Get-Command node).Source
+          $ownerOut = Join-Path $public 'ikuqa-owner.json'
+          $denyOut = Join-Path $public 'ikuqb-denied.json'
+          $afterOut = Join-Path $public 'ikuqb-after.json'
+          Remove-Item $ownerOut,$denyOut,$afterOut -Force -ErrorAction SilentlyContinue
+
+          $p1 = Start-Process -FilePath $node -Credential $credA -ArgumentList @($script,$coord,$lib,'4000',$ownerOut) -PassThru -WindowStyle Hidden
+          for ($i=0; $i -lt 50 -and -not (Test-Path $ownerOut); $i++) { Start-Sleep -Milliseconds 100 }
+          if (-not (Test-Path $ownerOut)) { throw 'owner result missing' }
+          Get-Content $ownerOut
+
+          $p2 = Start-Process -FilePath $node -Credential $credB -ArgumentList @($script,$coord,$lib,'0',$denyOut) -PassThru -Wait -WindowStyle Hidden
+          Get-Content $denyOut
+          $a = Get-Content $ownerOut | ConvertFrom-Json
+          $b = Get-Content $denyOut | ConvertFrom-Json
+          if ($a.result -ne 'ACQUIRED' -or $b.result -ne 'DENIED') { throw "cross-account contention failed: owner=$($a.result) contender=$($b.result)" }
+
+          $p1.WaitForExit()
+          $p3 = Start-Process -FilePath $node -Credential $credB -ArgumentList @($script,$coord,$lib,'0',$afterOut) -PassThru -Wait -WindowStyle Hidden
+          Get-Content $afterOut
+          $c = Get-Content $afterOut | ConvertFrom-Json
+          if ($c.result -ne 'ACQUIRED') { throw "post-release acquire failed: $($c.result)" }
+
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          Copy-Item $ownerOut,$denyOut,$afterOut artifacts\
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c04-cross-account-${{ runner.os }}-${{ runner.arch }}
+          path: artifacts/*.json
+          if-no-files-found: warn
