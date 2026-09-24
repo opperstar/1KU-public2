@@ -332,6 +332,48 @@ await runScenario('row090_modification_fence_aborts_stale_swap', async () => {
   return { sourceRows: count, staleSwapAborted: true };
 });
 
+await runScenario('row094_drop_known_retired_schema_objects', async () => {
+  const p = dbPath('row094');
+  const db = new DatabaseSync(p);
+  db.exec(`
+    CREATE TABLE current_table(id INTEGER PRIMARY KEY);
+    CREATE TABLE retired_table(id INTEGER PRIMARY KEY);
+    CREATE TABLE trigger_target(id INTEGER PRIMARY KEY);
+    CREATE TRIGGER retired_trigger AFTER INSERT ON trigger_target
+    BEGIN
+      INSERT INTO current_table(id) VALUES (NEW.id);
+    END;
+  `);
+
+  const before = new Set(db.prepare(
+    "SELECT type || ':' || name AS k FROM sqlite_master WHERE type IN ('table','trigger') AND name NOT LIKE 'sqlite_%'"
+  ).all().map(row => row.k));
+  assert(before.has('table:retired_table') && before.has('trigger:retired_trigger'),
+    'retired fixtures were not created', { before: [...before] });
+
+  const retiredTables = ['retired_table'];
+  const retiredTriggers = ['retired_trigger'];
+  for (const name of retiredTriggers) {
+    const q = '"' + name.replaceAll('"', '""') + '"';
+    db.exec(`DROP TRIGGER ${q}`);
+  }
+  for (const name of retiredTables) {
+    const q = '"' + name.replaceAll('"', '""') + '"';
+    db.exec(`DROP TABLE ${q}`);
+  }
+
+  const after = new Set(db.prepare(
+    "SELECT type || ':' || name AS k FROM sqlite_master WHERE type IN ('table','trigger') AND name NOT LIKE 'sqlite_%'"
+  ).all().map(row => row.k));
+  const currentStillThere = after.has('table:current_table') && after.has('table:trigger_target');
+  db.close();
+
+  assert(!after.has('table:retired_table') && !after.has('trigger:retired_trigger'),
+    'known retired objects remain after reconcile fix', { after: [...after] });
+  assert(currentStillThere, 'retired-object repair removed current schema objects', { after: [...after] });
+  return { before: [...before].sort(), after: [...after].sort(), currentStillThere };
+});
+
 await runScenario('row098_fk_check_fix_recheck', async () => {
   const p = dbPath('row098');
   const db = new DatabaseSync(p, { enableForeignKeyConstraints: false });
