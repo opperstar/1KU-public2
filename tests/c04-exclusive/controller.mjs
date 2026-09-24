@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { libraryGatePath } from './exclusive-gate.mjs';
 
-const sessionPath = fileURLToPath(new URL('./gate-session.mjs', import.meta.url));
+const sessionPath = fileURLToPath(new URL('./gate-session.mjs', import.meta.url));\nconst legacySessionPath = fileURLToPath(new URL('./legacy-main-session.mjs', import.meta.url));
 const suiteRoot = await fs.mkdtemp(path.join(os.tmpdir(), '1ku-c04-exclusive-'));
 const artifactDir = path.resolve('artifacts');
 await fs.mkdir(artifactDir, { recursive: true });
@@ -315,6 +315,61 @@ await runScenario('maintenance_keeps_claim_while_main_closed', async () => {
   assert(reopened.event === 'MAINTENANCE_MAIN_REOPENED', 'owner did not reopen Main under same claim', reopened);
   await owner.release();
   return {};
+});
+
+await runScenario('legacy_923_main_blocks_target_main_open', async () => {
+  const root = path.join(suiteRoot, 'legacy-923');
+  const coordRoot = path.join(root, 'coord');
+  const libraryId = unique('legacy');
+  const libraryRoot = path.join(root, 'LibraryRoot');
+  await fs.mkdir(libraryRoot, { recursive: true });
+
+  const legacy = spawn(process.execPath, [legacySessionPath, libraryRoot], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  let legacyBuffer = '';
+  legacy.stdout.setEncoding('utf8');
+  const legacyOpen = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('legacy open timeout')), 3000);
+    legacy.stdout.on('data', chunk => {
+      legacyBuffer += chunk;
+      const nl = legacyBuffer.indexOf('\n');
+      if (nl < 0) return;
+      const event = JSON.parse(legacyBuffer.slice(0, nl));
+      if (event.event === 'LEGACY_OPEN') {
+        clearTimeout(timer);
+        resolve(event);
+      }
+    });
+  });
+
+  let target = null;
+  try {
+    await legacyOpen;
+    target = await startSession({ coordRoot, libraryId, libraryRoot, label: 'target-with-legacy' });
+    const whileLegacy = await target.outcome(3000);
+    assert(whileLegacy.event !== 'ACQUIRED',
+      'target reached Main while legacy 923-style Main connection was still open',
+      { whileLegacy });
+
+    legacy.stdin.write('RELEASE\n');
+    await waitExit(legacy, 3000);
+
+    const next = await startSession({ coordRoot, libraryId, libraryRoot, label: 'target-after-legacy' });
+    const afterLegacy = await next.outcome(3000);
+    assert(afterLegacy.event === 'ACQUIRED',
+      'target could not acquire/open after legacy Main connection closed',
+      { afterLegacy });
+    await next.release();
+
+    return { whileLegacy: whileLegacy.event, afterLegacy: afterLegacy.event };
+  } finally {
+    if (target && target.child.exitCode === null) await target.release();
+    if (legacy.exitCode === null) {
+      legacy.stdin.write('RELEASE\n');
+      try { await waitExit(legacy, 2000); } catch { legacy.kill('SIGKILL'); }
+    }
+  }
 });
 
 await runScenario('different_libraryids_are_independent', async () => {
