@@ -1,0 +1,48 @@
+name: Zotero Local Library Model Qualification
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "tests/zotero-local-library-model/**"
+      - ".github/workflows/zotero-local-library-model.yml"
+  workflow_dispatch:
+
+jobs:
+  qualify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - macos-15
+          - ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        working-directory: tests/zotero-local-library-model
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install exact Yjs version used by current 1KU
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Run qualification
+        run: node controller.mjs
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zotero-local-library-model-${{ runner.os }}-${{ runner.arch }}
+          path: tests/zotero-local-library-model/artifacts/*.json
+          if-no-files-found: error
