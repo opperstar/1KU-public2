@@ -1,0 +1,121 @@
+name: Zotero Local Library Cross Account Qualification
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "tests/zotero-local-library-model/account-client.mjs"
+      - ".github/workflows/zotero-local-library-model-cross-account.yml"
+  workflow_dispatch:
+
+jobs:
+  qualify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - macos-15
+          - ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Linux two-account coexistence
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo useradd -m ikuqa || true
+          sudo useradd -m ikuqb || true
+          script="/var/tmp/1ku-account-client.mjs"
+          cp "$GITHUB_WORKSPACE/tests/zotero-local-library-model/account-client.mjs" "$script"
+          chmod 755 "$script"
+          lib="11111111-1111-4111-8111-444444444444"
+          outA="/var/tmp/1ku-account-a.json"
+          outB="/var/tmp/1ku-account-b.json"
+          rm -f "$outA" "$outB"
+          sudo rm -rf /home/ikuqa/.local/state/1ku-zotero-model /home/ikuqb/.local/state/1ku-zotero-model
+          sudo -u ikuqa "$(command -v node)" "$script" "/home/ikuqa/.local/state/1ku-zotero-model" "$lib" 5000 "$outA" &
+          pA=$!
+          sudo -u ikuqb "$(command -v node)" "$script" "/home/ikuqb/.local/state/1ku-zotero-model" "$lib" 5000 "$outB" &
+          pB=$!
+          wait "$pA"
+          wait "$pB"
+          node -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync('$outA'));const b=JSON.parse(fs.readFileSync('$outB'));if(a.result!=='ACQUIRED'||b.result!=='ACQUIRED'||a.libraryId!==b.libraryId||a.mainPath===b.mainPath||a.gatePath===b.gatePath)process.exit(1)"
+          mkdir -p artifacts
+          cp "$outA" "$outB" artifacts/
+
+      - name: macOS two-account coexistence
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo sysadminctl -addUser ikuqa -password 'Iku-QA-2026!' -home /Users/ikuqa || true
+          sudo sysadminctl -addUser ikuqb -password 'Iku-QB-2026!' -home /Users/ikuqb || true
+          script="/Users/Shared/1ku-account-client.mjs"
+          cp "$GITHUB_WORKSPACE/tests/zotero-local-library-model/account-client.mjs" "$script"
+          chmod 755 "$script"
+          lib="11111111-1111-4111-8111-444444444444"
+          outA="/Users/Shared/1ku-account-a.json"
+          outB="/Users/Shared/1ku-account-b.json"
+          rm -f "$outA" "$outB"
+          sudo rm -rf /Users/ikuqa/Library/Application\ Support/1KU-zotero-model /Users/ikuqb/Library/Application\ Support/1KU-zotero-model
+          sudo -u ikuqa "$(command -v node)" "$script" "/Users/ikuqa/Library/Application Support/1KU-zotero-model" "$lib" 5000 "$outA" &
+          pA=$!
+          sudo -u ikuqb "$(command -v node)" "$script" "/Users/ikuqb/Library/Application Support/1KU-zotero-model" "$lib" 5000 "$outB" &
+          pB=$!
+          wait "$pA"
+          wait "$pB"
+          node -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync('$outA'));const b=JSON.parse(fs.readFileSync('$outB'));if(a.result!=='ACQUIRED'||b.result!=='ACQUIRED'||a.libraryId!==b.libraryId||a.mainPath===b.mainPath||a.gatePath===b.gatePath)process.exit(1)"
+          mkdir -p artifacts
+          cp "$outA" "$outB" artifacts/
+
+      - name: Windows two-account coexistence
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pwA = ConvertTo-SecureString 'Iku-QA-2026!' -AsPlainText -Force
+          $pwB = ConvertTo-SecureString 'Iku-QB-2026!' -AsPlainText -Force
+          if (-not (Get-LocalUser -Name 'ikuqa' -ErrorAction SilentlyContinue)) { New-LocalUser -Name 'ikuqa' -Password $pwA -PasswordNeverExpires | Out-Null }
+          if (-not (Get-LocalUser -Name 'ikuqb' -ErrorAction SilentlyContinue)) { New-LocalUser -Name 'ikuqb' -Password $pwB -PasswordNeverExpires | Out-Null }
+          $credA = New-Object System.Management.Automation.PSCredential(".\ikuqa", $pwA)
+          $credB = New-Object System.Management.Automation.PSCredential(".\ikuqb", $pwB)
+          $public = $env:PUBLIC
+          $script = Join-Path $public '1ku-account-client.mjs'
+          Copy-Item "$env:GITHUB_WORKSPACE\tests\zotero-local-library-model\account-client.mjs" $script -Force
+          $lib = '11111111-1111-4111-8111-444444444444'
+          $rootA = 'C:\Users\ikuqa\AppData\Local\1KU-zotero-model'
+          $rootB = 'C:\Users\ikuqb\AppData\Local\1KU-zotero-model'
+          $outA = Join-Path $public '1ku-account-a.json'
+          $outB = Join-Path $public '1ku-account-b.json'
+          Remove-Item $outA,$outB -Force -ErrorAction SilentlyContinue
+          Remove-Item $rootA,$rootB -Recurse -Force -ErrorAction SilentlyContinue
+          $node = (Get-Command node).Source
+          $pA = Start-Process -FilePath $node -Credential $credA -ArgumentList @($script,$rootA,$lib,'5000',$outA) -PassThru -WindowStyle Hidden
+          $pB = Start-Process -FilePath $node -Credential $credB -ArgumentList @($script,$rootB,$lib,'5000',$outB) -PassThru -WindowStyle Hidden
+          $pA.WaitForExit()
+          $pB.WaitForExit()
+          if ($pA.ExitCode -ne 0 -or $pB.ExitCode -ne 0) { throw "account client failed" }
+          $a = Get-Content $outA | ConvertFrom-Json
+          $b = Get-Content $outB | ConvertFrom-Json
+          if ($a.result -ne 'ACQUIRED' -or $b.result -ne 'ACQUIRED' -or $a.libraryId -ne $b.libraryId -or $a.mainPath -eq $b.mainPath -or $a.gatePath -eq $b.gatePath) { throw "cross-account local-client coexistence failed" }
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          Copy-Item $outA,$outB artifacts\
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zotero-local-library-cross-account-${{ runner.os }}-${{ runner.arch }}
+          path: artifacts/*.json
+          if-no-files-found: error
