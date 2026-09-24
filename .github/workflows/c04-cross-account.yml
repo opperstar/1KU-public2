@@ -38,9 +38,11 @@ jobs:
           sudo useradd -m ikuqb || true
           coord="/var/tmp/1ku-c04-cross-account"
           lib="11111111-1111-4111-8111-222222222222"
-          script="$GITHUB_WORKSPACE/tests/c04-cross-account/cross-account-probe.mjs"
+          script="/var/tmp/cross-account-probe.mjs"
+          cp "$GITHUB_WORKSPACE/tests/c04-cross-account/cross-account-probe.mjs" "$script"
+          chmod 755 "$script"
           sudo rm -rf "$coord"
-          sudo -u ikuqa "$(command -v node)" "$script" "$coord" "$lib" 4000 "/var/tmp/ikuqa-owner.json" &
+          sudo -u ikuqa "$(command -v node)" "$script" "$coord" "$lib" 60000 "/var/tmp/ikuqa-owner.json" &
           owner_pid=$!
           for i in $(seq 1 50); do
             test -f /var/tmp/ikuqa-owner.json && break
@@ -51,7 +53,8 @@ jobs:
           sudo -u ikuqb "$(command -v node)" "$script" "$coord" "$lib" 0 "/var/tmp/ikuqb-denied.json"
           cat /var/tmp/ikuqb-denied.json
           node -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync('/var/tmp/ikuqa-owner.json'));const b=JSON.parse(fs.readFileSync('/var/tmp/ikuqb-denied.json'));if(a.result!=='ACQUIRED'||b.result!=='DENIED')process.exit(1)"
-          wait "$owner_pid"
+          kill -9 "$owner_pid" || true
+          wait "$owner_pid" || true
           sudo -u ikuqb "$(command -v node)" "$script" "$coord" "$lib" 0 "/var/tmp/ikuqb-after.json"
           cat /var/tmp/ikuqb-after.json
           node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync('/var/tmp/ikuqb-after.json'));if(c.result!=='ACQUIRED')process.exit(1)"
@@ -67,9 +70,11 @@ jobs:
           sudo sysadminctl -addUser ikuqb -password 'Iku-QB-2026!' -home /Users/ikuqb || true
           coord="/Users/Shared/1ku-c04-cross-account"
           lib="11111111-1111-4111-8111-222222222222"
-          script="$GITHUB_WORKSPACE/tests/c04-cross-account/cross-account-probe.mjs"
+          script="/Users/Shared/cross-account-probe.mjs"
+          cp "$GITHUB_WORKSPACE/tests/c04-cross-account/cross-account-probe.mjs" "$script"
+          chmod 755 "$script"
           sudo rm -rf "$coord"
-          sudo -u ikuqa "$(command -v node)" "$script" "$coord" "$lib" 4000 "/Users/Shared/ikuqa-owner.json" &
+          sudo -u ikuqa "$(command -v node)" "$script" "$coord" "$lib" 60000 "/Users/Shared/ikuqa-owner.json" &
           owner_pid=$!
           for i in $(seq 1 50); do
             test -f /Users/Shared/ikuqa-owner.json && break
@@ -80,7 +85,8 @@ jobs:
           sudo -u ikuqb "$(command -v node)" "$script" "$coord" "$lib" 0 "/Users/Shared/ikuqb-denied.json"
           cat /Users/Shared/ikuqb-denied.json
           node -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync('/Users/Shared/ikuqa-owner.json'));const b=JSON.parse(fs.readFileSync('/Users/Shared/ikuqb-denied.json'));if(a.result!=='ACQUIRED'||b.result!=='DENIED')process.exit(1)"
-          wait "$owner_pid"
+          kill -9 "$owner_pid" || true
+          wait "$owner_pid" || true
           sudo -u ikuqb "$(command -v node)" "$script" "$coord" "$lib" 0 "/Users/Shared/ikuqb-after.json"
           cat /Users/Shared/ikuqb-after.json
           node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync('/Users/Shared/ikuqb-after.json'));if(c.result!=='ACQUIRED')process.exit(1)"
@@ -112,7 +118,7 @@ jobs:
           $afterOut = Join-Path $public 'ikuqb-after.json'
           Remove-Item $ownerOut,$denyOut,$afterOut -Force -ErrorAction SilentlyContinue
 
-          $p1 = Start-Process -FilePath $node -Credential $credA -ArgumentList @($script,$coord,$lib,'4000',$ownerOut) -PassThru -WindowStyle Hidden
+          $p1 = Start-Process -FilePath $node -Credential $credA -ArgumentList @($script,$coord,$lib,'60000',$ownerOut) -PassThru -WindowStyle Hidden
           for ($i=0; $i -lt 50 -and -not (Test-Path $ownerOut); $i++) { Start-Sleep -Milliseconds 100 }
           if (-not (Test-Path $ownerOut)) { throw 'owner result missing' }
           Get-Content $ownerOut
@@ -123,7 +129,9 @@ jobs:
           $b = Get-Content $denyOut | ConvertFrom-Json
           if ($a.result -ne 'ACQUIRED' -or $b.result -ne 'DENIED') { throw "cross-account contention failed: owner=$($a.result) contender=$($b.result)" }
 
+          Stop-Process -Id $p1.Id -Force
           $p1.WaitForExit()
+          Start-Sleep -Milliseconds 300
           $p3 = Start-Process -FilePath $node -Credential $credB -ArgumentList @($script,$coord,$lib,'0',$afterOut) -PassThru -Wait -WindowStyle Hidden
           Get-Content $afterOut
           $c = Get-Content $afterOut | ConvertFrom-Json
