@@ -6,7 +6,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { libraryGatePath } from './exclusive-gate.mjs';
 
-const sessionPath = fileURLToPath(new URL('./gate-session.mjs', import.meta.url));\nconst legacySessionPath = fileURLToPath(new URL('./legacy-main-session.mjs', import.meta.url));
+const sessionPath = fileURLToPath(new URL('./gate-session.mjs', import.meta.url));
+const legacySessionPath = fileURLToPath(new URL('./legacy-main-session.mjs', import.meta.url));
 const suiteRoot = await fs.mkdtemp(path.join(os.tmpdir(), '1ku-c04-exclusive-'));
 const artifactDir = path.resolve('artifacts');
 await fs.mkdir(artifactDir, { recursive: true });
