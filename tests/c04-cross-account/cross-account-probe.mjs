@@ -1,4 +1,4 @@
-// orchestration-v2\nimport crypto from 'node:crypto';
+// orchestration-v2\nimport { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -22,7 +22,7 @@ try {
 }
 try { await fs.chmod(coordRoot, 0o777); } catch {}
 
-const key = crypto.createHash('sha256').update(String(libraryId)).digest('hex');
+const key = createHash('sha256').update(String(libraryId)).digest('hex');
 const gatePath = path.join(coordRoot, key + '.sqlite');
 const beforeUmask = process.umask(0);
 let db;
