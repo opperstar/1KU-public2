@@ -1,0 +1,8 @@
+{
+  "name": "1ku-zotero-local-library-model-qualification",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "yjs": "13.6.32"
+  }
+}
