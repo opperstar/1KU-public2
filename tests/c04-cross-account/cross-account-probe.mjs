@@ -42,6 +42,7 @@ try {
     result: 'ACQUIRED',
     elapsedMs: performance.now() - started,
     platform: process.platform,
+    pid: process.pid,
     uid: typeof process.getuid === 'function' ? process.getuid() : null,
     gatePath,
   };
@@ -57,6 +58,7 @@ try {
       result: 'DENIED',
       elapsedMs,
       platform: process.platform,
+      pid: process.pid,
       uid: typeof process.getuid === 'function' ? process.getuid() : null,
       gatePath,
     };
