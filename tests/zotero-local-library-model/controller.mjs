@@ -282,7 +282,7 @@ await runScenario('C1_newer_local_main_fails_closed_zero_business_write', async 
   assert(message === 'LOCAL_MAIN_NEWER_THAN_CLIENT_UPGRADE_REQUIRED', 'newer Main did not require upgrade', { message });
   assert(before.equals(after), 'newer Main admission mutated DB before fail-closed');
   assert(business === 'before', 'business data changed on incompatible admission', { business });
-  return { result: 'UPGRADE_REQUIRED', zeroMutation: true };
+  return { admission: 'UPGRADE_REQUIRED', zeroMutation: true };
 });
 
 await runScenario('C2_supported_old_local_main_forward_migrates_then_ready', async () => {
