@@ -771,7 +771,8 @@ evidence.finishedAt = new Date().toISOString();
 
 const artifact = path.join(artifactDir, `part1-preplan-${process.platform}-${process.arch}.json`);
 await fs.writeFile(artifact, JSON.stringify(evidence, null, 2));
-await fs.rm(root, { recursive: true, force: true });
+try { await fs.rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); }
+catch (error) { evidence.cleanupWarning = error?.message || String(error); }
 
 console.log(JSON.stringify({
   result: evidence.result,
