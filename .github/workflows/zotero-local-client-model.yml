@@ -1,0 +1,175 @@
+name: Zotero Local Client Model Qualification
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "tests/zotero-local-client-model/**"
+      - ".github/workflows/zotero-local-client-model.yml"
+  workflow_dispatch:
+
+jobs:
+  semantic:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - macos-15
+          - ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Run semantic qualification
+        run: node tests/zotero-local-client-model/controller.mjs
+
+      - name: Upload semantic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zotero-local-client-model-semantic-${{ runner.os }}-${{ runner.arch }}
+          path: artifacts/zotero-local-client-model-*.json
+          if-no-files-found: error
+
+  cross-account:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - macos-15
+          - ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Linux two-account local-client qualification
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo useradd -m ikuqa || true
+          sudo useradd -m ikuqb || true
+          lib="22222222-2222-4222-8222-bbbbbbbbbbbb"
+          script="/var/tmp/local-client-probe.mjs"
+          cp "$GITHUB_WORKSPACE/tests/zotero-local-client-model/local-client-probe.mjs" "$script"
+          chmod 755 "$script"
+          rootA="/var/tmp/1ku-zotero-model-a"
+          rootB="/var/tmp/1ku-zotero-model-b"
+          sudo rm -rf "$rootA" "$rootB"
+          rm -f /var/tmp/za-owner.json /var/tmp/zb-owner.json /var/tmp/za-denied.json /var/tmp/zb-denied.json
+          sudo -u ikuqa "$(command -v node)" "$script" "$rootA" "$lib" 12000 /var/tmp/za-owner.json &
+          pa=$!
+          sudo -u ikuqb "$(command -v node)" "$script" "$rootB" "$lib" 12000 /var/tmp/zb-owner.json &
+          pb=$!
+          for i in $(seq 1 120); do
+            test -f /var/tmp/za-owner.json -a -f /var/tmp/zb-owner.json && break
+            sleep 0.1
+          done
+          node -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync('/var/tmp/za-owner.json'));const b=JSON.parse(fs.readFileSync('/var/tmp/zb-owner.json'));if(a.result!=='ACQUIRED'||b.result!=='ACQUIRED'||a.libraryId!==b.libraryId||a.mainPath===b.mainPath||a.gatePath===b.gatePath)process.exit(1)"
+          sudo -u ikuqa "$(command -v node)" "$script" "$rootA" "$lib" 0 /var/tmp/za-denied.json
+          sudo -u ikuqb "$(command -v node)" "$script" "$rootB" "$lib" 0 /var/tmp/zb-denied.json
+          node -e "const fs=require('fs');for(const p of ['/var/tmp/za-denied.json','/var/tmp/zb-denied.json']){const x=JSON.parse(fs.readFileSync(p));if(x.result!=='DENIED')process.exit(1)}"
+          wait "$pa"
+          wait "$pb"
+          mkdir -p artifacts
+          cp /var/tmp/za-owner.json /var/tmp/zb-owner.json /var/tmp/za-denied.json /var/tmp/zb-denied.json artifacts/
+
+      - name: macOS two-account local-client qualification
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          pwA="$(uuidgen)Aa1!"
+          pwB="$(uuidgen)Bb1!"
+          sudo sysadminctl -addUser ikuqa -password "$pwA" -home /Users/ikuqa || true
+          sudo sysadminctl -addUser ikuqb -password "$pwB" -home /Users/ikuqb || true
+          lib="22222222-2222-4222-8222-bbbbbbbbbbbb"
+          script="/Users/Shared/local-client-probe.mjs"
+          cp "$GITHUB_WORKSPACE/tests/zotero-local-client-model/local-client-probe.mjs" "$script"
+          chmod 755 "$script"
+          rootA="/Users/Shared/1ku-zotero-model-a"
+          rootB="/Users/Shared/1ku-zotero-model-b"
+          sudo rm -rf "$rootA" "$rootB"
+          rm -f /Users/Shared/za-owner.json /Users/Shared/zb-owner.json /Users/Shared/za-denied.json /Users/Shared/zb-denied.json
+          sudo -u ikuqa "$(command -v node)" "$script" "$rootA" "$lib" 12000 /Users/Shared/za-owner.json &
+          pa=$!
+          sudo -u ikuqb "$(command -v node)" "$script" "$rootB" "$lib" 12000 /Users/Shared/zb-owner.json &
+          pb=$!
+          for i in $(seq 1 120); do
+            test -f /Users/Shared/za-owner.json -a -f /Users/Shared/zb-owner.json && break
+            sleep 0.1
+          done
+          node -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync('/Users/Shared/za-owner.json'));const b=JSON.parse(fs.readFileSync('/Users/Shared/zb-owner.json'));if(a.result!=='ACQUIRED'||b.result!=='ACQUIRED'||a.libraryId!==b.libraryId||a.mainPath===b.mainPath||a.gatePath===b.gatePath)process.exit(1)"
+          sudo -u ikuqa "$(command -v node)" "$script" "$rootA" "$lib" 0 /Users/Shared/za-denied.json
+          sudo -u ikuqb "$(command -v node)" "$script" "$rootB" "$lib" 0 /Users/Shared/zb-denied.json
+          node -e "const fs=require('fs');for(const p of ['/Users/Shared/za-denied.json','/Users/Shared/zb-denied.json']){const x=JSON.parse(fs.readFileSync(p));if(x.result!=='DENIED')process.exit(1)}"
+          wait "$pa"
+          wait "$pb"
+          mkdir -p artifacts
+          cp /Users/Shared/za-owner.json /Users/Shared/zb-owner.json /Users/Shared/za-denied.json /Users/Shared/zb-denied.json artifacts/
+
+      - name: Windows two-account local-client qualification
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pwAPlain = ([guid]::NewGuid().ToString() + 'Aa1!')
+          $pwBPlain = ([guid]::NewGuid().ToString() + 'Bb1!')
+          $pwA = ConvertTo-SecureString $pwAPlain -AsPlainText -Force
+          $pwB = ConvertTo-SecureString $pwBPlain -AsPlainText -Force
+          if (-not (Get-LocalUser -Name 'ikuqa' -ErrorAction SilentlyContinue)) { New-LocalUser -Name 'ikuqa' -Password $pwA -PasswordNeverExpires | Out-Null }
+          if (-not (Get-LocalUser -Name 'ikuqb' -ErrorAction SilentlyContinue)) { New-LocalUser -Name 'ikuqb' -Password $pwB -PasswordNeverExpires | Out-Null }
+          $credA = New-Object System.Management.Automation.PSCredential(".\ikuqa", $pwA)
+          $credB = New-Object System.Management.Automation.PSCredential(".\ikuqb", $pwB)
+          $public = $env:PUBLIC
+          $script = Join-Path $public 'local-client-probe.mjs'
+          Copy-Item "$env:GITHUB_WORKSPACE\tests\zotero-local-client-model\local-client-probe.mjs" $script -Force
+          $rootA = Join-Path $public '1ku-zotero-model-a'
+          $rootB = Join-Path $public '1ku-zotero-model-b'
+          Remove-Item $rootA,$rootB -Recurse -Force -ErrorAction SilentlyContinue
+          $lib = '22222222-2222-4222-8222-bbbbbbbbbbbb'
+          $node = (Get-Command node).Source
+          $ao = Join-Path $public 'za-owner.json'
+          $bo = Join-Path $public 'zb-owner.json'
+          $ad = Join-Path $public 'za-denied.json'
+          $bd = Join-Path $public 'zb-denied.json'
+          Remove-Item $ao,$bo,$ad,$bd -Force -ErrorAction SilentlyContinue
+          $pa = Start-Process -FilePath $node -Credential $credA -ArgumentList @($script,$rootA,$lib,'12000',$ao) -PassThru -WindowStyle Hidden
+          $pb = Start-Process -FilePath $node -Credential $credB -ArgumentList @($script,$rootB,$lib,'12000',$bo) -PassThru -WindowStyle Hidden
+          for ($i=0; $i -lt 150 -and (-not (Test-Path $ao) -or -not (Test-Path $bo)); $i++) { Start-Sleep -Milliseconds 100 }
+          if (-not (Test-Path $ao) -or -not (Test-Path $bo)) { throw 'owner result missing' }
+          $a = Get-Content $ao | ConvertFrom-Json
+          $b = Get-Content $bo | ConvertFrom-Json
+          if ($a.result -ne 'ACQUIRED' -or $b.result -ne 'ACQUIRED' -or $a.libraryId -ne $b.libraryId -or $a.mainPath -eq $b.mainPath -or $a.gatePath -eq $b.gatePath) { throw 'independent local clients did not acquire independently' }
+          Start-Process -FilePath $node -Credential $credA -ArgumentList @($script,$rootA,$lib,'0',$ad) -PassThru -Wait -WindowStyle Hidden | Out-Null
+          Start-Process -FilePath $node -Credential $credB -ArgumentList @($script,$rootB,$lib,'0',$bd) -PassThru -Wait -WindowStyle Hidden | Out-Null
+          $da = Get-Content $ad | ConvertFrom-Json
+          $db = Get-Content $bd | ConvertFrom-Json
+          if ($da.result -ne 'DENIED' -or $db.result -ne 'DENIED') { throw 'same local materialization contention failed' }
+          $pa.WaitForExit()
+          $pb.WaitForExit()
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          Copy-Item $ao,$bo,$ad,$bd artifacts\
+
+      - name: Upload cross-account evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zotero-local-client-model-cross-account-${{ runner.os }}-${{ runner.arch }}
+          path: artifacts/*.json
+          if-no-files-found: error
