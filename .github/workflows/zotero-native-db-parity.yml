@@ -40,7 +40,7 @@ jobs:
           path: artifacts/zotero-native-db-parity-*.json
           if-no-files-found: error
 
-row120_macos_nfs:
+  row120_macos_nfs:
     name: row120 macOS NFS translation
     runs-on: macos-15
 
