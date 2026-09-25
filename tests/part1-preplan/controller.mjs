@@ -926,6 +926,42 @@ await runScenario('q9_fresh_second_start_accepts_only_valid_target_only_current'
   return { accepted, missing, invalid, targetState };
 });
 
+
+// ---------------------------------------------------------------------------
+// Q10 — non-awaitable unload relies on C04 until async teardown terminal
+// ---------------------------------------------------------------------------
+
+await runScenario('q10_nonawaitable_unload_keeps_c04_until_teardown_terminal', async () => {
+  const coord = path.join(root, 'q10-unload');
+  const mainIdentity = 'same-local-main';
+  const oldInstance = await acquireGate(coord, mainIdentity);
+  assert(oldInstance.acquired, 'old instance did not acquire C04');
+
+  let teardownResolved = false;
+  const teardownPromise = (async () => {
+    await new Promise(r => setTimeout(r, 80));
+    oldInstance.release();
+    teardownResolved = true;
+  })();
+
+  // Equivalent to onunload(): void returning immediately after starting teardown.
+  const immediate = await acquireGate(coord, mainIdentity);
+  assert(!immediate.acquired, 'new instance acquired while old teardown still owned C04', immediate);
+  assert(!teardownResolved, 'teardown unexpectedly resolved before overlap attempt');
+
+  await teardownPromise;
+  const later = await acquireGate(coord, mainIdentity);
+  assert(later.acquired, 'later instance could not acquire after old teardown terminal');
+  later.release();
+
+  return {
+    overlapResult: 'DENIED',
+    teardownResolved,
+    laterResult: 'HELD',
+    automaticRetry: false,
+  };
+});
+
 const failures = Object.entries(evidence.scenarios).filter(([, v]) => v.result !== 'PASS');
 evidence.result = failures.length ? 'FAIL' : 'PASS';
 evidence.failedScenarios = failures.map(([name]) => name);
