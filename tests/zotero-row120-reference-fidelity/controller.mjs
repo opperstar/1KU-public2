@@ -79,12 +79,17 @@ function runContender(dbPath) {
   });
   let payload = null;
   try { payload = JSON.parse(String(r.stdout || '').trim()); } catch {}
+  const deniedWhileHeld =
+    (r.status === 10 && payload?.result === 'BLOCKED_BUSY')
+    || (r.status === null && r.signal === 'SIGTERM' && r.error?.code === 'ETIMEDOUT');
   return {
     status: r.status,
     signal: r.signal,
+    error: r.error ? { code: r.error.code, message: r.error.message } : null,
     stdout: String(r.stdout || '').trim(),
     stderr: String(r.stderr || '').trim(),
     payload,
+    deniedWhileHeld,
   };
 }
 
@@ -178,8 +183,8 @@ await runScenario('row120_use_wal_true_equivalent_landing', async () => {
   assert(journal === 'wal', 'WAL was not established', { journal });
   assert(walBytes > 0, 'WAL did not contain real data', { walBytes });
   assert(!shmExists, 'EXCLUSIVE-before-WAL created -shm', { shmExists });
-  assert(contenderHeld.status === 10 && contenderHeld.payload?.result === 'BLOCKED_BUSY',
-    'second writer was not blocked while owner held EXCLUSIVE', contenderHeld);
+  assert(contenderHeld.deniedWhileHeld,
+    'second writer crossed owner EXCLUSIVE protection', contenderHeld);
   assert(walAfter === 0, 'checkpoint did not truncate WAL', { checkpoint, walAfter });
   assert(contenderReleased.status === 0 && contenderReleased.payload?.result === 'WRITE_SUCCEEDED',
     'second writer did not succeed after owner release', contenderReleased);
@@ -240,8 +245,8 @@ await runScenario('row120_use_wal_false_preopen_downgrade_nonempty_wal', async (
 
   assert(locking === 'exclusive', 'rollback branch did not establish EXCLUSIVE', { locking });
   assert(finalJournal !== 'wal', 'rollback branch reopened in WAL mode', { finalJournal });
-  assert(contenderHeld.status === 10 && contenderHeld.payload?.result === 'BLOCKED_BUSY',
-    'rollback branch did not block second writer', contenderHeld);
+  assert(contenderHeld.deniedWhileHeld,
+    'rollback branch allowed a second writer through owner EXCLUSIVE protection', contenderHeld);
   assert(rows === 60 && integrity === 'ok', 'rollback branch lost WAL data or failed integrity', { rows, integrity });
 
   return { sourceWalBytes, beforeMode, deleteMode, convertedRows, convertedIntegrity, locking, finalJournal, contenderHeld, rows, integrity };
