@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import fss from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { DatabaseSync, backup } from 'node:sqlite';
+import { DatabaseSync } from 'node:sqlite';
 
 const root = await fs.mkdtemp(path.join(os.tmpdir(), '1ku-part1-preplan-'));
 const artifactDir = path.resolve('artifacts');
@@ -765,19 +765,47 @@ await runScenario('q7_last_view_release_is_last_and_reopen_is_fresh', async () =
 
 
 // ---------------------------------------------------------------------------
-// Q8 — OLD exclusive held while source->target snapshot is produced
+// Q8 — OLD exclusive held while row065-style source family snapshot is produced
 // ---------------------------------------------------------------------------
 
-await runScenario('q8_old_exclusive_backup_snapshot_blocks_contender', async () => {
+function copySqliteFamilyWhileHeld(sourcePath, candidatePath) {
+  rmSync(candidatePath);
+  removeReplaySidecars(candidatePath);
+  fss.copyFileSync(sourcePath, candidatePath);
+  for (const suffix of ['-wal', '-journal']) {
+    const src = sourcePath + suffix;
+    if (existsSync(src)) fss.copyFileSync(src, candidatePath + suffix);
+  }
+  rmSync(candidatePath + '-shm');
+}
+
+function validateAndNormalizeCandidate(candidatePath) {
+  const db = new DatabaseSync(candidatePath);
+  const value = db.prepare('SELECT value FROM proof WHERE id=1').get()?.value;
+  const integrityResult = scalar(db.prepare('PRAGMA integrity_check(1)').get());
+  const journalMode = scalar(db.prepare('PRAGMA journal_mode=DELETE').get());
+  db.close();
+  rmSync(candidatePath + '-wal');
+  rmSync(candidatePath + '-shm');
+  rmSync(candidatePath + '-journal');
+  return { value, integrityResult, journalMode: String(journalMode || '').toLowerCase() };
+}
+
+await runScenario('q8_old_exclusive_row065_snapshot_blocks_contender', async () => {
   const oldPath = dbPath('q8-old');
-  const targetPath = dbPath('q8-target');
-  const old = new DatabaseSync(oldPath);
-  old.exec(`
+  const candidatePath = dbPath('q8-target-candidate');
+
+  const seed = new DatabaseSync(oldPath);
+  seed.exec('PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0;');
+  seed.exec(`
     CREATE TABLE proof(id INTEGER PRIMARY KEY, value TEXT NOT NULL);
     INSERT INTO proof(value) VALUES('legacy-source');
-    PRAGMA busy_timeout=250;
-    BEGIN EXCLUSIVE;
   `);
+  const walBefore = existsSync(oldPath + '-wal') ? fss.statSync(oldPath + '-wal').size : 0;
+  assert(walBefore > 0, 'fixture did not produce non-empty WAL', { walBefore });
+
+  const owner = new DatabaseSync(oldPath);
+  owner.exec('PRAGMA busy_timeout=250; BEGIN EXCLUSIVE;');
 
   let contenderBusy = false;
   const contender = new DatabaseSync(oldPath);
@@ -791,31 +819,36 @@ await runScenario('q8_old_exclusive_backup_snapshot_blocks_contender', async () 
   }
   assert(contenderBusy, 'OLD exclusive did not block competing writer');
 
-  await backup(old, targetPath);
+  copySqliteFamilyWhileHeld(oldPath, candidatePath);
+  const normalized = validateAndNormalizeCandidate(candidatePath);
+  assert(normalized.value === 'legacy-source', 'candidate lost committed WAL data', normalized);
+  assert(normalized.integrityResult === 'ok', 'candidate integrity failed', normalized);
+  assert(normalized.journalMode === 'delete', 'candidate did not normalize to DELETE', normalized);
 
-  const candidate = new DatabaseSync(targetPath, { readOnly: true });
-  const value = candidate.prepare('SELECT value FROM proof WHERE id=1').get()?.value;
-  const integrityResult = scalar(candidate.prepare('PRAGMA integrity_check(1)').get());
-  candidate.close();
-  assert(value === 'legacy-source', 'backup candidate lost OLD source data', { value });
-  assert(integrityResult === 'ok', 'backup candidate integrity failed', { integrityResult });
-
-  const contenderAfterBackup = new DatabaseSync(oldPath);
+  const contenderAfterSnapshot = new DatabaseSync(oldPath);
   let stillBusy = false;
   try {
-    contenderAfterBackup.exec('PRAGMA busy_timeout=0; BEGIN IMMEDIATE;');
+    contenderAfterSnapshot.exec('PRAGMA busy_timeout=0; BEGIN IMMEDIATE;');
   } catch (error) {
     stillBusy = isBusy(error);
   } finally {
-    try { contenderAfterBackup.exec('ROLLBACK'); } catch {}
-    contenderAfterBackup.close();
+    try { contenderAfterSnapshot.exec('ROLLBACK'); } catch {}
+    contenderAfterSnapshot.close();
   }
-  assert(stillBusy, 'backup released OLD exclusive unexpectedly');
+  assert(stillBusy, 'snapshot released OLD exclusive unexpectedly');
 
-  old.exec('ROLLBACK');
-  old.close();
+  owner.exec('ROLLBACK');
+  owner.close();
+  seed.close();
 
-  return { contenderBusy, candidateValue: value, integrity: integrityResult, exclusiveHeldAcrossBackup: stillBusy };
+  return {
+    contenderBusy,
+    walBytes: walBefore,
+    candidateValue: normalized.value,
+    integrity: normalized.integrityResult,
+    normalizedJournalMode: normalized.journalMode,
+    exclusiveHeldAcrossSnapshot: stillBusy,
+  };
 });
 
 // ---------------------------------------------------------------------------
