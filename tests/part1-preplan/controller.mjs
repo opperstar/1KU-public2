@@ -962,6 +962,60 @@ await runScenario('q10_nonawaitable_unload_keeps_c04_until_teardown_terminal', a
   };
 });
 
+
+// ---------------------------------------------------------------------------
+// Q11 — same held OLD transaction commits retirement fence, then legacy retry fails
+// ---------------------------------------------------------------------------
+
+await runScenario('q11_same_held_old_transaction_commits_fence_before_legacy_retry', async () => {
+  const p = dbPath('q11-old');
+  createLegacy923Main(p);
+
+  const owner = new DatabaseSync(p);
+  owner.exec('PRAGMA busy_timeout=250; BEGIN EXCLUSIVE;');
+
+  const contender = new DatabaseSync(p);
+  let contenderBusy = false;
+  try {
+    contender.exec('PRAGMA busy_timeout=0; BEGIN IMMEDIATE;');
+  } catch (error) {
+    contenderBusy = isBusy(error);
+  } finally {
+    try { contender.exec('ROLLBACK'); } catch {}
+    contender.close();
+  }
+  assert(contenderBusy, 'OLD exclusive did not block pre-fence contender');
+
+  const before = owner.prepare("SELECT value FROM knowledge_meta WHERE key='product_foundation_version'").get()?.value;
+  assert(before === 'b1', 'unexpected pre-fence foundation', { before });
+
+  // No nested BEGIN and no second OLD connection: write inside the already-held EXCLUSIVE transaction.
+  owner.prepare("UPDATE knowledge_meta SET value=? WHERE key='product_foundation_version'").run('retired-libraryroot-v1');
+  owner.exec('COMMIT');
+
+  const after = owner.prepare("SELECT value FROM knowledge_meta WHERE key='product_foundation_version'").get()?.value;
+  assert(after === 'retired-libraryroot-v1', 'fence readback mismatch after commit', { after });
+  owner.close();
+
+  let legacyMessage = '';
+  try { legacy923Attempt(p); } catch (error) { legacyMessage = error?.message || String(error); }
+  assert(legacyMessage === 'PRODUCT_FOUNDATION_VERSION_UNSUPPORTED', 'legacy retry escaped committed fence', { legacyMessage });
+
+  const check = new DatabaseSync(p, { readOnly: true });
+  const rows = Number(scalar(check.prepare('SELECT COUNT(*) FROM product_business').get()));
+  const fence = check.prepare("SELECT value FROM knowledge_meta WHERE key='product_foundation_version'").get()?.value;
+  check.close();
+  assert(rows === 1 && fence === 'retired-libraryroot-v1', 'legacy retry mutated after fence', { rows, fence });
+
+  return {
+    preFenceContender: 'DENIED',
+    fence,
+    legacyRetry: legacyMessage,
+    businessRows: rows,
+    transition: 'EXCLUSIVE_TRANSACTION_TO_DURABLE_FENCE',
+  };
+});
+
 const failures = Object.entries(evidence.scenarios).filter(([, v]) => v.result !== 'PASS');
 evidence.result = failures.length ? 'FAIL' : 'PASS';
 evidence.failedScenarios = failures.map(([name]) => name);
