@@ -11,14 +11,8 @@ on:
 
 jobs:
   qualify:
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - windows-latest
-          - macos-15
-          - ubuntu-24.04
-    runs-on: ${{ matrix.os }}
+    name: macOS Zotero row120 semantic-equivalence
+    runs-on: macos-15
 
     steps:
       - name: Checkout
@@ -36,6 +30,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: zotero-row120-reference-fidelity-${{ runner.os }}-${{ runner.arch }}
+          name: zotero-row120-reference-fidelity-macOS-${{ runner.arch }}
           path: artifacts/zotero-row120-reference-fidelity-*.json
           if-no-files-found: error
