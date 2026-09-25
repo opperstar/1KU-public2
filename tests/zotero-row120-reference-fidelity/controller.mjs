@@ -123,6 +123,11 @@ async function runScenario(name, fn) {
   }
 }
 
+if (process.argv[2] === '--contender') {
+  process.exitCode = contenderMain(process.argv[3]);
+}
+else {
+
 await runScenario('row120_exact_zotero_can_use_wal_decision_table', async () => {
   const cases = [
     ['mac-null-info', { platform: 'darwin', info: null, byteRangeLocks: true }, false],
@@ -271,3 +276,4 @@ console.log(JSON.stringify({
 }, null, 2));
 
 if (evidence.result !== 'PASS') process.exitCode = 1;
+}
