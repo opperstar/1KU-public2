@@ -97,7 +97,10 @@ function macNativeAdvlockProbe(target) {
 }
 
 const statfs = await fsp.statfs(root);
-const fsExportNames = Object.keys(fs).filter(x => /lock|fcntl|attrlist|statfs/i.test(x)).sort();
+const fsExportNames = Object.keys(fs).sort();
+const nodePublicByteRangeLockSymbols = fsExportNames.filter(x =>
+  /^(fcntl|fcntlSync|flock|flockSync|lockf|lockfSync|getattrlist|getattrlistSync)$/i.test(x)
+);
 
 const evidence = {
   schema: 1,
@@ -109,9 +112,9 @@ const evidence = {
   nodePublicFs: {
     statfsKeys: Object.keys(statfs).sort(),
     statfsValues: Object.fromEntries(Object.entries(statfs).map(([k,v]) => [k, typeof v === 'bigint' ? v.toString() : v])),
-    lockRelatedExports: fsExportNames,
+    byteRangeLockSymbols: nodePublicByteRangeLockSymbols,
     hasDirectReadOnlyField: Object.prototype.hasOwnProperty.call(statfs, 'readOnly') || Object.prototype.hasOwnProperty.call(statfs, 'flags'),
-    hasDirectByteRangeLockCapabilityField: Object.keys(statfs).some(k => /lock|adv/i.test(k)) || fsExportNames.some(k => /fcntl|byte.*lock|adv.*lock/i.test(k)),
+    hasDirectByteRangeLockCapabilityField: nodePublicByteRangeLockSymbols.length > 0,
   },
   providerFacts: {},
   productionBindingAssessment: {},
@@ -138,30 +141,25 @@ if (process.platform === 'linux') {
 }
 
 if (process.platform === 'darwin') {
-  const statType = run('/usr/bin/stat', ['-f', '%T', root]);
   const mount = macMountInfo(root);
-  const nativeAdv = macNativeAdvlockProbe(root);
   evidence.providerFacts.macos = {
-    statCommand: statType,
     mount,
-    fsTypeFromSystemStat: statType.status === 0 ? statType.stdout : null,
+    fsTypeFromMount: mount && !mount.error ? mount.fsType : null,
     readOnlyFromMountFlags: mount && !mount.error ? mount.flags.includes('read-only') : null,
-    nativeGetattrlistAdvlock: nativeAdv,
+    nodeStatfsType: statfs.type,
+    appleNativeRequirement: 'ATTR_VOL_CAPABILITIES / VOL_CAP_INT_ADVLOCK is the source-equivalent byte-range-lock fact; Node 24 fs.StatFs does not expose volume capability bits',
   };
   const nodeDirectAdvlock =
     evidence.nodePublicFs.hasDirectByteRangeLockCapabilityField;
   evidence.productionBindingAssessment = {
-    fsType: statType.status === 0 ? 'SYSTEM_COMMAND_FACT_AVAILABLE' : 'UNAVAILABLE',
+    fsType: mount && !mount.error ? 'SYSTEM_COMMAND_FACT_AVAILABLE' : 'UNAVAILABLE',
     readOnly: mount && !mount.error ? 'SYSTEM_COMMAND_FACT_AVAILABLE' : 'UNAVAILABLE',
     byteRangeLocks: nodeDirectAdvlock
       ? 'DIRECT_NODE_PUBLIC_CAPABILITY_AVAILABLE'
-      : (nativeAdv.result?.validAdvlock ? 'OS_NATIVE_FACT_EXISTS_BUT_NODE_PUBLIC_BINDING_ABSENT' : 'UNAVAILABLE'),
-    providerCandidate: nodeDirectAdvlock
-      ? 'node public API'
-      : null,
+      : 'OS_NATIVE_FACT_NOT_EXPOSED_BY_NODE_PUBLIC_FS',
+    providerCandidate: nodeDirectAdvlock ? 'node public API' : null,
     newDependencyRequired: false,
-    nativeAddonOrHelperWouldBeRequiredForExactAdvlockFact:
-      !nodeDirectAdvlock && !!nativeAdv.result?.validAdvlock,
+    nativeAddonOrHelperWouldBeRequiredForExactAdvlockFact: !nodeDirectAdvlock,
   };
 }
 
