@@ -71,8 +71,8 @@ jobs:
 
           printf '%s -mapall=%s:%s -network 127.0.0.1 -mask 255.255.255.255\n'             "$EXPORT_DIR" "$(id -u)" "$(id -g)" | sudo tee /etc/exports >/dev/null
           sudo nfsd enable
-          sudo nfsd restart
-          sudo mount_nfs -o vers=3 127.0.0.1:"$EXPORT_DIR" "$MOUNT_DIR"
+          sudo nfsd restart || true
+          sudo mount_nfs -o vers=4 127.0.0.1:"$EXPORT_DIR" "$MOUNT_DIR"
           mount | grep "$MOUNT_DIR"
           echo "ROW120_NETWORK_FS_ROOT=$MOUNT_DIR" >> "$GITHUB_ENV"
 
