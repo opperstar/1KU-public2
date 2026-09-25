@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import fss from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, backup } from 'node:sqlite';
 
 const root = await fs.mkdtemp(path.join(os.tmpdir(), '1ku-part1-preplan-'));
 const artifactDir = path.resolve('artifacts');
@@ -761,6 +761,136 @@ await runScenario('q7_last_view_release_is_last_and_reopen_is_fresh', async () =
   assert(JSON.stringify(events) === JSON.stringify(expected), 'teardown ordering changed', { events, expected });
   await second.dispose();
   return { firstGeneration: first.generation, secondGeneration: second.generation, events: expected };
+});
+
+
+// ---------------------------------------------------------------------------
+// Q8 — OLD exclusive held while source->target snapshot is produced
+// ---------------------------------------------------------------------------
+
+await runScenario('q8_old_exclusive_backup_snapshot_blocks_contender', async () => {
+  const oldPath = dbPath('q8-old');
+  const targetPath = dbPath('q8-target');
+  const old = new DatabaseSync(oldPath);
+  old.exec(`
+    CREATE TABLE proof(id INTEGER PRIMARY KEY, value TEXT NOT NULL);
+    INSERT INTO proof(value) VALUES('legacy-source');
+    PRAGMA busy_timeout=250;
+    BEGIN EXCLUSIVE;
+  `);
+
+  let contenderBusy = false;
+  const contender = new DatabaseSync(oldPath);
+  try {
+    contender.exec('PRAGMA busy_timeout=0; BEGIN IMMEDIATE;');
+  } catch (error) {
+    contenderBusy = isBusy(error);
+  } finally {
+    try { contender.exec('ROLLBACK'); } catch {}
+    contender.close();
+  }
+  assert(contenderBusy, 'OLD exclusive did not block competing writer');
+
+  await backup(old, targetPath);
+
+  const candidate = new DatabaseSync(targetPath, { readOnly: true });
+  const value = candidate.prepare('SELECT value FROM proof WHERE id=1').get()?.value;
+  const integrityResult = scalar(candidate.prepare('PRAGMA integrity_check(1)').get());
+  candidate.close();
+  assert(value === 'legacy-source', 'backup candidate lost OLD source data', { value });
+  assert(integrityResult === 'ok', 'backup candidate integrity failed', { integrityResult });
+
+  const contenderAfterBackup = new DatabaseSync(oldPath);
+  let stillBusy = false;
+  try {
+    contenderAfterBackup.exec('PRAGMA busy_timeout=0; BEGIN IMMEDIATE;');
+  } catch (error) {
+    stillBusy = isBusy(error);
+  } finally {
+    try { contenderAfterBackup.exec('ROLLBACK'); } catch {}
+    contenderAfterBackup.close();
+  }
+  assert(stillBusy, 'backup released OLD exclusive unexpectedly');
+
+  old.exec('ROLLBACK');
+  old.close();
+
+  return { contenderBusy, candidateValue: value, integrity: integrityResult, exclusiveHeldAcrossBackup: stillBusy };
+});
+
+// ---------------------------------------------------------------------------
+// Q9 — fresh install second startup: existing identity + valid target + no OLD
+// ---------------------------------------------------------------------------
+
+function createQualifiedTargetMain(p, libraryId) {
+  const db = new DatabaseSync(p);
+  db.exec(`
+    CREATE TABLE knowledge_meta(key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
+    INSERT INTO knowledge_meta(key,value) VALUES
+      ('product_foundation_version','b1'),
+      ('product_schema_version','3'),
+      ('library_id','${libraryId}');
+  `);
+  db.close();
+}
+
+function classifyNoOldRestart({ identityMode, oldExists, targetExists, targetValidCurrent }) {
+  if (oldExists) return 'LEGACY_SOURCE_PRESENT';
+  if (identityMode === 'FRESH' && !targetExists) return 'FRESH_NO_LEGACY_SOURCE';
+  if (identityMode === 'EXISTING' && targetExists && targetValidCurrent) return 'TARGET_ONLY_CURRENT';
+  return 'FAIL_CLOSED';
+}
+
+await runScenario('q9_fresh_second_start_accepts_only_valid_target_only_current', async () => {
+  const dir = path.join(root, 'q9-fresh-restart');
+  await createThreeFiles(dir);
+  const first = await preAcquireIdentity(dir);
+  assert(first.mode === 'FRESH', 'first start was not FRESH', first);
+
+  const targetPath = path.join(dir, 'knowledge.sqlite');
+  createQualifiedTargetMain(targetPath, first.libraryId);
+
+  const second = await preAcquireIdentity(dir);
+  assert(second.mode === 'EXISTING' && second.libraryId === first.libraryId, 'second start identity mismatch', second);
+
+  const target = new DatabaseSync(targetPath, { readOnly: true });
+  const targetState = {
+    foundation: target.prepare("SELECT value FROM knowledge_meta WHERE key='product_foundation_version'").get()?.value,
+    schema: target.prepare("SELECT value FROM knowledge_meta WHERE key='product_schema_version'").get()?.value,
+    libraryId: target.prepare("SELECT value FROM knowledge_meta WHERE key='library_id'").get()?.value,
+    integrity: scalar(target.prepare('PRAGMA integrity_check(1)').get()),
+  };
+  target.close();
+
+  const validCurrent = targetState.foundation === 'b1' &&
+    targetState.schema === '3' &&
+    targetState.libraryId === second.libraryId &&
+    targetState.integrity === 'ok';
+
+  const accepted = classifyNoOldRestart({
+    identityMode: second.mode,
+    oldExists: false,
+    targetExists: true,
+    targetValidCurrent: validCurrent,
+  });
+  assert(accepted === 'TARGET_ONLY_CURRENT', 'valid target-only second start was rejected', { accepted, targetState });
+
+  const missing = classifyNoOldRestart({
+    identityMode: second.mode,
+    oldExists: false,
+    targetExists: false,
+    targetValidCurrent: false,
+  });
+  const invalid = classifyNoOldRestart({
+    identityMode: second.mode,
+    oldExists: false,
+    targetExists: true,
+    targetValidCurrent: false,
+  });
+  assert(missing === 'FAIL_CLOSED', 'EXISTING + no OLD + no target did not fail closed', { missing });
+  assert(invalid === 'FAIL_CLOSED', 'EXISTING + no OLD + invalid target did not fail closed', { invalid });
+
+  return { accepted, missing, invalid, targetState };
 });
 
 const failures = Object.entries(evidence.scenarios).filter(([, v]) => v.result !== 'PASS');
