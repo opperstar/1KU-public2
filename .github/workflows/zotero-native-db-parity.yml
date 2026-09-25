@@ -39,3 +39,65 @@ jobs:
           name: zotero-native-db-parity-${{ runner.os }}-${{ runner.arch }}
           path: artifacts/zotero-native-db-parity-*.json
           if-no-files-found: error
+
+row120_macos_nfs:
+    name: row120 macOS NFS translation
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Setup loopback NFS
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPORT_DIR="$RUNNER_TEMP/row120-nfs-export"
+          MOUNT_DIR="$RUNNER_TEMP/row120-nfs-mount"
+          mkdir -p "$EXPORT_DIR" "$MOUNT_DIR"
+          chmod 777 "$EXPORT_DIR" "$MOUNT_DIR"
+
+          if [ -f /etc/exports ]; then
+            sudo cp /etc/exports "$RUNNER_TEMP/exports.before"
+            echo "ROW120_EXPORTS_EXISTED=1" >> "$GITHUB_ENV"
+          else
+            echo "ROW120_EXPORTS_EXISTED=0" >> "$GITHUB_ENV"
+          fi
+
+          printf '%s -mapall=%s:%s -network 127.0.0.1 -mask 255.255.255.255\n'             "$EXPORT_DIR" "$(id -u)" "$(id -g)" | sudo tee /etc/exports >/dev/null
+          sudo nfsd enable
+          sudo nfsd restart
+          sudo mount_nfs -o vers=3 127.0.0.1:"$EXPORT_DIR" "$MOUNT_DIR"
+          mount | grep "$MOUNT_DIR"
+          echo "ROW120_NETWORK_FS_ROOT=$MOUNT_DIR" >> "$GITHUB_ENV"
+
+      - name: Run row120 network filesystem qualification
+        run: node tests/zotero-native-db-parity/row120-network-fs.mjs
+
+      - name: Upload row120 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: row120-network-fs-${{ runner.os }}-${{ runner.arch }}
+          path: artifacts/row120-network-fs-*.json
+          if-no-files-found: error
+
+      - name: Cleanup loopback NFS
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          if [ -n "${ROW120_NETWORK_FS_ROOT:-}" ]; then
+            sudo umount "$ROW120_NETWORK_FS_ROOT"
+          fi
+          if [ "${ROW120_EXPORTS_EXISTED:-0}" = "1" ] && [ -f "$RUNNER_TEMP/exports.before" ]; then
+            sudo cp "$RUNNER_TEMP/exports.before" /etc/exports
+          else
+            sudo rm -f /etc/exports
+          fi
+          sudo nfsd restart
