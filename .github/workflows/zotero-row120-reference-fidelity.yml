@@ -1,0 +1,41 @@
+name: Zotero row120 Reference Fidelity Qualification
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "tests/zotero-row120-reference-fidelity/**"
+      - ".github/workflows/zotero-row120-reference-fidelity.yml"
+  workflow_dispatch:
+
+jobs:
+  qualify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - macos-15
+          - ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Run Zotero row120 reference-fidelity qualification
+        run: node tests/zotero-row120-reference-fidelity/controller.mjs
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zotero-row120-reference-fidelity-${{ runner.os }}-${{ runner.arch }}
+          path: artifacts/zotero-row120-reference-fidelity-*.json
+          if-no-files-found: error
