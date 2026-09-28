@@ -1,5 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import React, { useSyncExternalStore } from 'react';
+import TestRenderer, { act } from 'react-test-renderer';
 import {
   QueryClient,
   QueryObserver,
@@ -36,6 +38,62 @@ function newClient() {
         retry: false,
       },
     },
+  });
+}
+
+
+async function testUseSyncExternalStoreContract() {
+  let snapshot = Object.freeze({ identity: 'A', count: 81 });
+  const listeners = new Set();
+
+  const store = {
+    getSnapshot() {
+      return snapshot;
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    publish(next) {
+      snapshot = Object.freeze(next);
+      for (const listener of listeners) listener();
+    },
+  };
+
+  function Probe() {
+    const value = useSyncExternalStore(
+      store.subscribe,
+      store.getSnapshot,
+      store.getSnapshot,
+    );
+    return React.createElement('output', null, `${value.identity}:${value.count}`);
+  }
+
+  let renderer;
+  await act(async () => {
+    renderer = TestRenderer.create(React.createElement(Probe));
+  });
+
+  const first = renderer.toJSON()?.children?.join('') ?? null;
+  record(
+    'useSyncExternalStore consumes synchronous initial snapshot',
+    first === 'A:81',
+    JSON.stringify({ first }),
+  );
+
+  await act(async () => {
+    store.publish({ identity: 'B', count: 82 });
+  });
+
+  const second = renderer.toJSON()?.children?.join('') ?? null;
+  record(
+    'useSyncExternalStore updates after store publication',
+    second === 'B:82',
+    JSON.stringify({ second }),
+  );
+
+  await act(async () => {
+    renderer.unmount();
   });
 }
 
@@ -222,6 +280,7 @@ let status = 'PASS';
 let error = null;
 
 try {
+  await testUseSyncExternalStoreContract();
   await testPerSpaceIsolation();
   await testPrefixInvalidationActiveOnly();
   await testLkgSurvivesBackgroundRefresh();
@@ -236,7 +295,7 @@ const report = {
   qualification: 'P021 Space Count TanStack Query',
   status,
   runtime: process.version,
-  package: '@tanstack/react-query@5.101.4',
+  package: '@tanstack/react-query@5.101.4 + react@19.2.8',
   contracts: results,
   error,
 };
