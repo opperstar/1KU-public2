@@ -1,0 +1,9 @@
+{
+  "name": "p021-space-count-query-qualification",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@tanstack/react-query": "5.101.4",
+    "react": "19.2.8"
+  }
+}
