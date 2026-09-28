@@ -1,0 +1,38 @@
+name: P021 Space Count Query Qualification
+
+on:
+  push:
+    branches:
+      - p021-space-count-query-qualification
+    paths:
+      - "tests/p021-space-count-query/**"
+      - ".github/workflows/p021-space-count-query.yml"
+  workflow_dispatch:
+
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install qualification dependencies
+        working-directory: tests/p021-space-count-query
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Run P021 space-count qualification
+        run: node tests/p021-space-count-query/controller.mjs
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p021-space-count-query
+          path: artifacts/p021-space-count-query.json
+          if-no-files-found: error
