@@ -232,6 +232,62 @@ async function testLkgSurvivesBackgroundRefresh() {
   client.clear();
 }
 
+
+async function testSameKeyInvalidationRejectsLateOldResult() {
+  const client = newClient();
+  client.setQueryData(['space-item-count', 'B'], 81);
+
+  const first = deferred();
+  const second = deferred();
+  let calls = 0;
+
+  const observer = new QueryObserver(client, {
+    queryKey: ['space-item-count', 'B'],
+    queryFn: async () => {
+      calls += 1;
+      return calls === 1 ? first.promise : second.promise;
+    },
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+  const unsubscribe = observer.subscribe(() => {});
+
+  const oldRefetch = observer.refetch();
+  await Promise.resolve();
+
+  const invalidate = client.invalidateQueries({
+    queryKey: ['space-item-count', 'B'],
+    exact: true,
+    refetchType: 'active',
+  });
+  await Promise.resolve();
+
+  record(
+    'same-key invalidation starts a replacement fetch while prior refetch is pending',
+    calls === 2,
+    JSON.stringify({ calls }),
+  );
+
+  second.resolve(82);
+  await invalidate;
+  const afterNew = client.getQueryData(['space-item-count', 'B']);
+
+  first.resolve(79);
+  await oldRefetch.catch(() => {});
+  await Promise.resolve();
+
+  const afterLateOld = client.getQueryData(['space-item-count', 'B']);
+
+  record(
+    'late pre-invalidation same-key result cannot overwrite newer admitted result',
+    afterNew === 82 && afterLateOld === 82,
+    JSON.stringify({ afterNew, afterLateOld, calls }),
+  );
+
+  unsubscribe();
+  client.clear();
+}
+
 async function testGcLifetime() {
   const client = newClient();
   client.setQueryData(['space-item-count', 'B'], 81);
@@ -284,6 +340,7 @@ try {
   await testPerSpaceIsolation();
   await testPrefixInvalidationActiveOnly();
   await testLkgSurvivesBackgroundRefresh();
+  await testSameKeyInvalidationRejectsLateOldResult();
   await testGcLifetime();
   await testFreshGenerationDoesNotInheritCache();
 } catch (err) {
