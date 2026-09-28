@@ -312,6 +312,57 @@ async function testGcLifetime() {
   client.clear();
 }
 
+
+async function testZeroSubscriberInvalidationAndPrefixCleanup() {
+  const client = newClient();
+  let bFetches = 0;
+
+  const observer = new QueryObserver(client, {
+    queryKey: ['space-item-count', 'B'],
+    queryFn: async () => {
+      bFetches += 1;
+      return 81 + bFetches;
+    },
+    staleTime: Infinity,
+  });
+  const unsubscribe = observer.subscribe(() => {});
+  await observer.refetch();
+  unsubscribe();
+
+  client.setQueryData(['products', 'visible'], { ok: true });
+  const before = bFetches;
+
+  await client.invalidateQueries({
+    queryKey: ['space-item-count'],
+    refetchType: 'active',
+  });
+
+  record(
+    'zero-subscriber prefix invalidation marks count stale without hidden refetch',
+    bFetches === before
+      && client.getQueryState(['space-item-count', 'B'])?.isInvalidated === true,
+    JSON.stringify({
+      before,
+      after: bFetches,
+      invalidated: client.getQueryState(['space-item-count', 'B'])?.isInvalidated,
+    }),
+  );
+
+  client.removeQueries({ queryKey: ['space-item-count'] });
+
+  record(
+    'count-prefix cleanup removes only P021 count queries from shared QueryClient',
+    client.getQueryData(['space-item-count', 'B']) === undefined
+      && client.getQueryData(['products', 'visible'])?.ok === true,
+    JSON.stringify({
+      count: client.getQueryData(['space-item-count', 'B']),
+      unrelated: client.getQueryData(['products', 'visible']),
+    }),
+  );
+
+  client.clear();
+}
+
 async function testFreshGenerationDoesNotInheritCache() {
   const oldClient = newClient();
   oldClient.setQueryData(['space-item-count', 'B'], 81);
@@ -342,6 +393,7 @@ try {
   await testLkgSurvivesBackgroundRefresh();
   await testSameKeyInvalidationRejectsLateOldResult();
   await testGcLifetime();
+  await testZeroSubscriberInvalidationAndPrefixCleanup();
   await testFreshGenerationDoesNotInheritCache();
 } catch (err) {
   status = 'FAIL';
