@@ -4,6 +4,7 @@
   "type": "module",
   "dependencies": {
     "@tanstack/react-query": "5.101.4",
-    "react": "19.2.8"
+    "react": "19.2.8",
+    "react-test-renderer": "19.2.8"
   }
 }
