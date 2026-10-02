@@ -1009,6 +1009,21 @@ var results = {};
 var scalar2 = (db, sql) => Object.values(db.prepare(sql).get())[0];
 try {
   const main = join3(root, "main.sqlite");
+  if (process.platform === "darwin") {
+    const diagnostics = new DatabaseSync4(":memory:");
+    console.log("NATIVE_DIAGNOSTICS", diagnostics.prepare("PRAGMA compile_options").all());
+    for (const vfs of ["unix", "unix-nfs", "unix-afp", "unix-dotfile", "unix-none"]) {
+      try {
+        diagnostics.exec(`ATTACH DATABASE 'file:${join3(root, `diagnostic-${vfs}.sqlite`)}?vfs=${vfs}' AS probe`);
+        console.log("NATIVE_VFS", vfs, scalar2(diagnostics, "PRAGMA probe.journal_mode=WAL"));
+        diagnostics.exec("DETACH DATABASE probe");
+      } catch (error) {
+        console.log("NATIVE_VFS_ERROR", vfs, error);
+      }
+    }
+    diagnostics.close();
+    for (const file of readdirSync(root)) rmSync4(join3(root, file), { recursive: true, force: true });
+  }
   assert.equal(canUseWAL(main), true);
   assert.deepEqual(readdirSync(root), []);
   const channel = new MessageChannel2();
