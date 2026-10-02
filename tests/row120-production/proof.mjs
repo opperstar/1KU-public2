@@ -411,8 +411,8 @@ function canUseWAL(databasePath) {
     probePath = candidate;
     closeSync(fd);
     probe = new DatabaseSync(candidate);
-    if (Number(scalar(probe, "SELECT sqlite_compileoption_used('ENABLE_LOCKING_STYLE')")) !== 1)
-      return false;
+    probe.exec("ATTACH DATABASE 'file::memory:?vfs=unix-nfs' AS locking_style");
+    probe.exec("DETACH DATABASE locking_style");
     if (String(scalar(probe, "PRAGMA locking_mode=NORMAL")).toLowerCase() !== "normal")
       return false;
     return String(scalar(probe, "PRAGMA journal_mode=WAL")).toLowerCase() === "wal";
@@ -1009,21 +1009,6 @@ var results = {};
 var scalar2 = (db, sql) => Object.values(db.prepare(sql).get())[0];
 try {
   const main = join3(root, "main.sqlite");
-  if (process.platform === "darwin") {
-    const diagnostics = new DatabaseSync4(":memory:");
-    console.log("NATIVE_DIAGNOSTICS", diagnostics.prepare("PRAGMA compile_options").all());
-    for (const vfs of ["unix", "unix-nfs", "unix-afp", "unix-dotfile", "unix-none"]) {
-      try {
-        diagnostics.exec(`ATTACH DATABASE 'file:${join3(root, `diagnostic-${vfs}.sqlite`)}?vfs=${vfs}' AS probe`);
-        console.log("NATIVE_VFS", vfs, scalar2(diagnostics, "PRAGMA probe.journal_mode=WAL"));
-        diagnostics.exec("DETACH DATABASE probe");
-      } catch (error) {
-        console.log("NATIVE_VFS_ERROR", vfs, error);
-      }
-    }
-    diagnostics.close();
-    for (const file of readdirSync(root)) rmSync4(join3(root, file), { recursive: true, force: true });
-  }
   assert.equal(canUseWAL(main), true);
   assert.deepEqual(readdirSync(root), []);
   const channel = new MessageChannel2();
@@ -1070,7 +1055,7 @@ try {
     assert.deepEqual(readdirSync(targetDir), ["main.sqlite"]);
     results.missingFactsAndSymlinkTargetAndCleanup = "PASS";
     const built = new DatabaseSync4(":memory:");
-    assert.equal(scalar2(built, "SELECT sqlite_compileoption_used('ENABLE_LOCKING_STYLE')"), 1);
+    built.exec("ATTACH DATABASE 'file::memory:?vfs=unix-nfs' AS native_locking_style");
     built.close();
     results.nativeMacLockingStyle = "PASS";
     for (const vfs of ["unix-nfs", "unix-afp", "unix-dotfile", "unix-none"]) {
@@ -1080,6 +1065,9 @@ try {
         vfsDb.exec(`ATTACH DATABASE '${uri.replaceAll("'", "''")}' AS probe`);
         assert.notEqual(scalar2(vfsDb, "PRAGMA probe.journal_mode=WAL"), "wal");
         results[vfs] = "PASS_NATIVE_WAL_DENIED";
+      } catch (cause) {
+        assert.equal(cause.errcode & 255, 10);
+        results[vfs] = "PASS_NATIVE_IO_DENIED";
       } finally {
         vfsDb.close();
       }
