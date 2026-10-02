@@ -1,0 +1,21 @@
+name: Row120 production WAL
+on:
+  pull_request:
+    paths:
+      - 'tests/row120-production/**'
+      - '.github/workflows/row120-production.yml'
+  workflow_dispatch:
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.20.0'
+      - name: Actual production C02 qualification
+        run: node tests/row120-production/proof.mjs
