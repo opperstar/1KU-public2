@@ -1,0 +1,10 @@
+{
+  "name": "1ku-native-trash-qualification",
+  "version": "1.0.0",
+  "private": true,
+  "main": "main.cjs",
+  "dependencies": {
+    "electron": "43.3.0",
+    "@electron/remote": "^2.1.3"
+  }
+}
