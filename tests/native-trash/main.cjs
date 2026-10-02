@@ -3,13 +3,13 @@ const { app, BrowserWindow } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 require('@electron/remote/main').initialize();
-async function probe() {
+async function probe(remoteModulePath) {
   const fs = require('node:fs/promises');
   const path = require('node:path');
   const os = require('node:os');
   const assert = require('node:assert/strict');
   const { randomUUID } = require('node:crypto');
-  const shell = require('@electron/remote').shell;
+  const shell = require(remoteModulePath).shell;
   const prefix = '1ku-trash-' + randomUUID();
   const root = path.join(os.homedir(), prefix);
   await fs.mkdir(root);
@@ -55,7 +55,7 @@ app.whenReady().then(async () => {
   fs.mkdirSync(path.dirname(output), { recursive: true });
   try {
     await window.loadURL('about:blank');
-    const report = await window.webContents.executeJavaScript('(' + probe.toString() + ')()');
+    const report = await window.webContents.executeJavaScript('(' + probe.toString() + ')(' + JSON.stringify(require.resolve('@electron/remote')) + ')');
     fs.writeFileSync(output, JSON.stringify(report, null, 2));
     console.log(JSON.stringify(report));
     app.exit(0);
