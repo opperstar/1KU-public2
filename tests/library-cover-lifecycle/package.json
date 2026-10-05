@@ -1,0 +1,15 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run --config vitest.config.mjs"
+  },
+  "dependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "@tanstack/react-query": "5.101.4",
+    "uuid": "14.0.1",
+    "vitest": "4.1.10",
+    "jsdom": "30.0.1"
+  }
+}

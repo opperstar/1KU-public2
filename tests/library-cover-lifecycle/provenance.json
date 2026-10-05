@@ -1,0 +1,40 @@
+{
+  "generatedAt": "2026-10-05T07:40:20.717Z",
+  "scope": "Exact current Library hook/Card lifecycle tests bundled without a source map. Native Image/IntersectionObserver and loader are controlled fixtures. This is not Obsidian Host acceptance or a memory benchmark.",
+  "dependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "@tanstack/react-query": "5.101.4",
+    "uuid": "14.0.1",
+    "vitest": "4.1.10",
+    "jsdom": "30.0.1"
+  },
+  "inputs": [
+    {
+      "path": "src/core/knowledge/product-model.ts",
+      "sha256": "533b564630649cf178f570457a49b715121204296983a016f4b892343e76a4ce",
+      "bytes": 4470
+    },
+    {
+      "path": "src/core/items/item-id.ts",
+      "sha256": "366d449fca66fbfeaa229f216c218e9b15ed8975f885f053948a5d7e048b046e",
+      "bytes": 842
+    },
+    {
+      "path": "src/features/library/use-library-covers.ts",
+      "sha256": "676550f7efab81f426c1a427b9bddb7eb40ac3261bd4a56706c70c3cd753a9f9",
+      "bytes": 7208
+    },
+    {
+      "path": "src/features/library/ui/library-card-cover.tsx",
+      "sha256": "9a6fbf432e8f0bf083791d466972ce1c8f890a33d0a80fac4916e0e2aa62ebb2",
+      "bytes": 2595
+    },
+    {
+      "path": "tests/ui/library-covers.test.tsx",
+      "sha256": "4fa5bde1366aba1f0f0b10101ab80e4b11e718d875b2747428dd90065267a178",
+      "bytes": 29231
+    }
+  ],
+  "bundleSha256": "78a9b4f8a54153c3cb6e0ec3b21f5d8f0e5c7e954d114265728fa35b32810612"
+}

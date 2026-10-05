@@ -1,0 +1,35 @@
+name: Library Cover Lifecycle Qualification
+on:
+  push:
+    branches: ['codex/library-cover-lifecycle-20261005']
+    paths: ['tests/library-cover-lifecycle/**', '.github/workflows/library-cover-lifecycle.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qualify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-15, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install exact qualification dependencies
+        working-directory: tests/library-cover-lifecycle
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run bounded current production lifecycle tests
+        working-directory: tests/library-cover-lifecycle
+        run: npm test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: library-cover-lifecycle-${{ matrix.os }}
+          path: |
+            tests/library-cover-lifecycle/result.json
+            tests/library-cover-lifecycle/provenance.json
+          if-no-files-found: error
