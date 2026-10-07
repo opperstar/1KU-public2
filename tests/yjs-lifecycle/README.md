@@ -1,5 +1,7 @@
-# Yjs lifecycle qualification
+# Yjs lifecycle production revalidation
 
-Run `node --expose-gc lifetime.cjs current` and `node --expose-gc lifetime.cjs candidate` in separate children. The current actual Provider must reproduce a retained synthetic old Host business object. The candidate must reuse one same-version Yjs constructor identity while retaining no synthetic old business object. Both must release destroyed documents and detached observers, preserve raw update/state-vector semantics, reject version mismatch and preserve portable convergence/duplicate/cold-rebuild/invalid-byte behavior.
+`current.cjs` is the frozen actual pre-cutover Provider baseline. `candidate.cjs` now contains the actual approved production Provider and the complete artifact from the canonical Build producer, with no virtual source replacement.
 
-The candidate executes the complete trusted official dependency through the same native Node primitive previously qualified for Watchpack. It does not compile App code or change sync semantics. Qualification only; production is unchanged. See provenance.json for scope and limitations.
+Run `node --expose-gc lifetime.cjs current` and `node --expose-gc lifetime.cjs candidate` in separate children. Both preserve same-version constructor identity, original update/convergence/duplicate/cold-rebuild/invalid-byte/version-fence contracts and native document/observer cleanup. The baseline reproduces a retained synthetic Host business object; production must retain none over 30 generations.
+
+Node CI only; original Main/C01 tests and Obsidian Host are separately verified on Windows. No whole-App memory benefit is inferred; independent Redux retention remains. See provenance.json.
