@@ -12,7 +12,7 @@
   ],
   "files": {
     "current.cjs": "09886c14ed6a0bb4ee75ab0c09135d96434ee4e8618bf96724d8e965f5f38f81",
-    "candidate.cjs": "db2a8d32278f9003b584c4096ccb87320928804c649924bc4af4fb378a5b0f88",
+    "candidate.cjs": "add7ae3bde476cf8383b6714aebf2a3d26bc81f656d6a3624bcfe683e7d60ef3",
     "lifetime.cjs": "81807afe76eebfd3c2d215b004cd48ff9030087f389e87e26fb239f8717c6f33"
   },
   "sourceScope": "Actual production Build artifact and sole Yjs Provider/portable facade. Current fixture is frozen pre-cutover baseline, candidate is production with no virtual overlay. No App, UI, Main DB, Worker, user data or snapshots.",
