@@ -1,0 +1,51 @@
+{
+  "scope": "Validator fixture export only; no vault, host snapshots, user data, App/React/Worker payload",
+  "versions": {
+    "zod": "4.6.5",
+    "valibot": "1.5.0"
+  },
+  "sources": [
+    {
+      "path": "src/features/products/schemas/product.ts",
+      "sha256": "4598eddafae443dbf77a3363d0df3554b200001ce1fea7ef8403545b1cbb83fe"
+    },
+    {
+      "path": "src/features/users/schemas/user.ts",
+      "sha256": "69640f06c1f244a919ab10af2cc7cab899a60ad7325913466895775232e2384b"
+    },
+    {
+      "path": "src/features/profile/utils/form-schema.ts",
+      "sha256": "3fa4aeaf138a5bd604d175d9f84a932869dbf42ee4aaea8e687defd1e7d1c36e"
+    },
+    {
+      "path": "src/ui/composites/lib/parsers.ts",
+      "sha256": "caf808e9a62e5b3b5f02c33fa68285bc8d0e033739ef8a67d74e7105a8c93f7d"
+    },
+    {
+      "path": "src/ui/composites/config/data-table.ts",
+      "sha256": "a909af54cbf46cc450b01760c2848f8bdbaefd44f52dd1982ab62fe6a034d352"
+    },
+    {
+      "path": "src/ui/composites/forms/demo-form-content.tsx",
+      "sha256": "54cffbf2f504c3cc7cec4a2b7b1494a95fdb1294960027cff0f0668dec010fae"
+    },
+    {
+      "path": "src/features/forms/ui/advanced-form-patterns.tsx",
+      "sha256": "201f50b0687c49c3f88fd51cf54f0641d1d7f1224b2eacd7c6c5a75a26f8ce6e"
+    },
+    {
+      "path": "src/features/forms/ui/multi-step-product-form.tsx",
+      "sha256": "7e124219eededd2c4d41de948f41a7df0368a26388e47ba6400adfc5a9ee8c9a"
+    },
+    {
+      "path": "src/features/auth/ui/user-auth-form.tsx",
+      "sha256": "87bd1eb2b104c0cd2a6414369c09ca96af256df7e1b39b17623f261af9b2c949"
+    }
+  ],
+  "exportedMessages": 212,
+  "limitations": [
+    "Full original React consumers qualified locally on Windows; not part of this public fixture",
+    "Not production cutover or real Obsidian Host RAM evidence",
+    "Default library wording and Core LibraryId error contract remain developer decisions"
+  ]
+}
