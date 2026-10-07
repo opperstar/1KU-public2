@@ -1,0 +1,15 @@
+{
+  "name": "public-official-ui-dependency-qualification",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --expose-gc qualify.mjs" },
+  "dependencies": {
+    "esbuild": "0.28.2",
+    "jsdom": "30.0.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "motion": "13.1.0",
+    "overlayscrollbars": "2.16.0",
+    "overlayscrollbars-react": "0.5.6"
+  }
+}
