@@ -20,9 +20,11 @@ export function createWorkerPayloadBanner(database, navigation) {
         const kind = kinds[index];
         if (!source.trim()) throw new Error('WORKER_PAYLOAD_SOURCE_EMPTY');
         const packed = gzipSync(Buffer.from(source, 'utf8')).toString('base64');
+        // Obsidian 1.14.4 crashes when the native Buffer string is handed to Blob/Worker.
+        // Decode with the Web primitive; preserve a BOM so the source identity is unchanged.
         return (
           `const IKU_${kind}_WORKER_SOURCE_SHA256=${JSON.stringify(hash(source))};` +
-          `function IKU_READ_${kind}_WORKER_SOURCE(){return new Promise((resolve,reject)=>require('node:zlib').gunzip(Buffer.from(${JSON.stringify(packed)},'base64'),(error,bytes)=>error?reject(error):resolve(bytes.toString('utf8'))));}`
+          `function IKU_READ_${kind}_WORKER_SOURCE(){return new Promise((resolve,reject)=>require('node:zlib').gunzip(Buffer.from(${JSON.stringify(packed)},'base64'),(error,bytes)=>error?reject(error):resolve(new TextDecoder('utf-8',{ignoreBOM:true}).decode(bytes))));}`
         );
       })
       .join('') +
