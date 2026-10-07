@@ -1,0 +1,27 @@
+name: F1 Worker Payload
+on:
+  push:
+    branches: ['codex/f1-native-dependency-scope']
+    paths:
+      - 'qualification/worker-payload/**'
+      - '.github/workflows/f1-worker-payload.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qualify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-15, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install existing RPC fixture dependency
+        run: npm install --no-save --package-lock=false comlink@4.4.2
+      - name: Qualify native gzip and canonical generic Worker source lifecycle
+        run: node qualification/worker-payload/cross-platform.mjs
