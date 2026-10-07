@@ -1,0 +1,26 @@
+{
+  "version": "13.6.32",
+  "dependencyHash": "480a2b156dd12ad45c95a38f547d1ec8921481662743ce638535e0bbd2b106f3",
+  "dependencyBytes": 106150,
+  "transitiveInputCount": 29,
+  "dependencyScope": [
+    "yjs",
+    "lib0"
+  ],
+  "externalBuiltins": [
+    "node:crypto"
+  ],
+  "files": {
+    "current.cjs": "09886c14ed6a0bb4ee75ab0c09135d96434ee4e8618bf96724d8e965f5f38f81",
+    "candidate.cjs": "abca413bad7162133749744bf3c9209ad95e9538a66a98c592fa0afc24823275",
+    "lifetime.cjs": "059b2c2f60a250dfa32398c31220eb674f0ed6c4ce1fbe2dc11b8375feadfaa2"
+  },
+  "sourceScope": "Original Yjs Provider and portable qualification facade; candidate virtually replaces only import demand. No App, UI, Main database, Worker, user data or heap snapshots.",
+  "approval": "Qualification only, production adoption not approved",
+  "limitations": [
+    "Node qualification only; not macOS/Linux Obsidian acceptance",
+    "Private Main/C01 tests run separately on Windows",
+    "Diagnostic GC is never product logic",
+    "Does not repair independent React Redux retention"
+  ]
+}
