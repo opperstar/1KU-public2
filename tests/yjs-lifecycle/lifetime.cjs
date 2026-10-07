@@ -57,7 +57,7 @@ async function generation(){
  if(mode==='candidate')assert.equal(oldBusinessObjects,0);
  else assert.ok(oldBusinessObjects>0,'Current real provider must reproduce retention');
  assert.equal(warnings.some(w=>w.includes('Yjs was already imported')),false);
- const result={mode,node:process.version,platform:process.platform,arch:process.arch,generations:30,beforeInitialization,sameConstructor:true,versionFence:true,portableFacade:true,warnings,oldBusinessObjects,retainedDocuments,retainedObserverStates,heap:require('node:v8').getHeapStatistics().used_heap_size,scope:'Fresh Node child, actual current Provider/facade; only dependency seam virtually replaced in candidate; simulated Host require business root; native unobserve/destroy; diagnostic GC only'};
+ const result={mode,node:process.version,platform:process.platform,arch:process.arch,generations:30,beforeInitialization,sameConstructor:true,versionFence:true,portableFacade:true,warnings,oldBusinessObjects,retainedDocuments,retainedObserverStates,heap:require('node:v8').getHeapStatistics().used_heap_size,scope:'Fresh Node child, actual current Provider/facade; frozen pre-cutover baseline or actual production candidate, no virtual overlay; simulated Host require business root; native unobserve/destroy; diagnostic GC only'};
  fs.writeFileSync(path.join(__dirname,mode+'-lifetime-result.json'),JSON.stringify(result,null,2));
  console.log(JSON.stringify(result));
 })().catch(error=>{console.error=process.stderr.write.bind(process.stderr);process.stderr.write(String(error.stack)+'\n');process.exitCode=1;});
