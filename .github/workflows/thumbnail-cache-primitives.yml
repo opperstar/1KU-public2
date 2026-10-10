@@ -1,0 +1,33 @@
+name: Thumbnail cache primitive qualification
+on:
+  push:
+    branches: [codex/cache-primitives-20261010]
+    paths:
+      - qualification/cache-primitives/**
+      - .github/workflows/thumbnail-cache-primitives.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  primitives:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-15, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: qualification/cache-primitives
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.18.0
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cache-primitives-${{ matrix.os }}
+          path: qualification/cache-primitives/result.json
+          if-no-files-found: error

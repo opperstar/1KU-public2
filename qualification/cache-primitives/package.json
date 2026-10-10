@@ -1,0 +1,12 @@
+{
+  "name": "iku-thumbnail-cache-primitives-qualification",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node qualify.mjs"
+  },
+  "dependencies": {
+    "cacache": "21.0.1",
+    "lru-cache": "11.5.3"
+  }
+}
