@@ -103,7 +103,7 @@ if (process.argv[2] === 'reopen') {
     check('repeated clear has no extra disposal', disposed.length === beforeClear + beforeSize);
 
     const lock = JSON.parse(await readFile(join(here, 'package-lock.json'), 'utf8'));
-    const result = { status: 'PRIMITIVES_VERIFIED_NOT_PRODUCTION_QUALIFIED', platform: process.platform, node: process.version, versions: Object.fromEntries(['cacache', 'lru-cache'].map(n => [n, lock.packages[`node_modules/${n}`].version])), lockSha256: createHash('sha256').update(await readFile(join(here, 'package-lock.json'))).digest('hex'), checks, gaps, scope: 'Synthetic local filesystem and declared-cost resources only; no Obsidian, browser native allocation, real Query/Card, user data or production writes.', notRun: ['actual Query/Card byte-budget memory comparison', 'original D03 candidate integration', 'macOS/Linux', 'Obsidian Host'] };
+    const result = { status: 'PRIMITIVES_VERIFIED_NOT_PRODUCTION_QUALIFIED', platform: process.platform, node: process.version, versions: Object.fromEntries(['cacache', 'lru-cache'].map(n => [n, lock.packages[`node_modules/${n}`].version])), lockSha256: createHash('sha256').update(await readFile(join(here, 'package-lock.json'))).digest('hex'), checks, gaps, scope: 'Synthetic local filesystem and declared-cost resources only; no Obsidian, browser native allocation, real Query/Card, user data or production writes.', notRun: ['actual Query/Card byte-budget memory comparison', 'original D03 candidate integration', 'Obsidian Host'] };
     await writeFile(join(here, 'result.json'), JSON.stringify(result, null, 2) + '\n');
     console.log(JSON.stringify(result, null, 2));
   } finally {
