@@ -1,0 +1,31 @@
+name: Kanban project files smoke
+on:
+  push:
+    branches: [codex/kanban-project-files-smoke-20261025]
+    paths: ['tests/kanban-project-files-smoke/**', '.github/workflows/kanban-project-files-smoke.yml']
+jobs:
+  cover:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-15, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    env:
+      TEMP: ${{ github.workspace }}/.build/tmp
+      TMP: ${{ github.workspace }}/.build/tmp
+      TMPDIR: ${{ github.workspace }}/.build/tmp
+    steps:
+      - uses: actions/checkout@v4
+      - run: node -e "require('fs').mkdirSync('.build/tmp',{recursive:true})"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node tests/kanban-project-files-smoke/smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: project-files-${{ runner.os }}
+          path: .build/kanban-project-files-smoke/result.json
+          if-no-files-found: error
+
