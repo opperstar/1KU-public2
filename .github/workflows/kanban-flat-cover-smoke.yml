@@ -1,0 +1,31 @@
+name: Kanban flat cover smoke
+on:
+  push:
+    branches: [codex/kanban-flat-cover-smoke-20261025]
+    paths: ['tests/kanban-flat-cover-smoke/**', '.github/workflows/kanban-flat-cover-smoke.yml']
+jobs:
+  cover:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-15, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    env:
+      TEMP: ${{ github.workspace }}/.build/tmp
+      TMP: ${{ github.workspace }}/.build/tmp
+      TMPDIR: ${{ github.workspace }}/.build/tmp
+    steps:
+      - uses: actions/checkout@v4
+      - run: node -e "require('fs').mkdirSync('.build/tmp',{recursive:true})"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node tests/kanban-flat-cover-smoke/smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: flat-cover-${{ runner.os }}
+          path: .build/kanban-flat-cover-smoke/result.json
+          if-no-files-found: error
+
